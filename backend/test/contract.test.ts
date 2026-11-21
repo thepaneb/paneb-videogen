@@ -61,7 +61,9 @@ test("contrato: setup", async () => {
 
 test("contrato: todas as rotas do Express estão no OpenAPI e vice-versa", async () => {
   const { createApp } = await import("../src/app.js");
-  const stack: any[] = (createApp() as any)._router.stack;
+  // Express 4 expõe `app._router`; no 5 passou a `app.router` (mesmo formato de stack).
+  const app: any = createApp();
+  const stack: any[] = (app.router ?? app._router).stack;
   const actual = new Set<string>();
   for (const l of stack) if (l.route) for (const m of Object.keys(l.route.methods)) actual.add(`${m.toUpperCase()} ${l.route.path.replace(/:(\w+)/g, "{$1}")}`);
   const documented = new Set<string>();
