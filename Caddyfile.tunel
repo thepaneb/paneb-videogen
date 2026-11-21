@@ -1,0 +1,29 @@
+# Uso conjunto de UM túnel ngrok (free = 1 túnel) para dois serviços locais:
+#   https://<dominio>/videogen/*  -> backend VideoGen (:3100)
+#   https://<dominio>/* (resto)   -> live-persona (:3000, intocado)
+#
+# Uso:
+#   caddy run --config Caddyfile.tunel
+#   ngrok http 8090 --url=graceful-fragrance-extrovert.ngrok-free.dev
+# O app VideoGen usa como base "https://<dominio>/videogen" (o prefixo é removido
+# aqui, então a API continua vendo as rotas na raiz: /jobs, /capabilities, /files...).
+{
+	auto_https off
+}
+
+:8090 {
+	# Sem logs de acesso em disco (só erros no console).
+	log {
+		output discard
+	}
+
+	handle /videogen/* {
+		uri strip_prefix /videogen
+		reverse_proxy 127.0.0.1:3100
+	}
+
+	# live-persona: repasse transparente (Host e paths preservados).
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
