@@ -5,8 +5,10 @@ Verificado em **2026-11-22**. Oficial: [tutorial Wan 2.2 no ComfyUI](https://doc
 licença Apache 2.0 (uso comercial permitido).
 
 Diferente do [LTX](comfyui-ltx.md) (que pede 32 GB+ de VRAM no oficial), o Wan 2.2 5B foi feito para
-hardware modesto: a doc oficial indica que **roda com 8 GB de VRAM** (com offloading),
-e o teste aqui foi numa **RTX 3060 12 GB**.
+hardware modesto: a doc oficial indica que **roda com 8 GB de VRAM** (com offloading).
+
+Render real validado neste projeto: **RTX 3060 12 GB, clipe de 5 s em 384×640 (`low`) em ~3,5 min**
+(só texto; sem áudio). Template oficial intacto (cfg 5, 20 passos, denoise 1.0).
 
 ## 1. Requisitos
 
