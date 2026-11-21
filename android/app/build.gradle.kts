@@ -71,6 +71,6 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
-    implementation(platform("com.google.firebase:firebase-bom:34.2.0"))
+    implementation(platform("com.google.firebase:firebase-bom:35.2.0"))
     implementation("com.google.firebase:firebase-messaging")
 }
