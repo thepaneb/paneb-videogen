@@ -297,6 +297,7 @@ fun SettingsScreen(vm: VideoViewModel) {
         vm.testConnection()
         while (true) { delay(60_000); vm.testConnection() }
     }
+    LaunchedEffect(Unit) { vm.checkForUpdates() }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
     Column(
@@ -334,7 +335,26 @@ fun SettingsScreen(vm: VideoViewModel) {
             }
         }
         if (vm.message.isNotEmpty()) Text(vm.message)
+        Text("Versão ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.labelSmall)
+        val updCtx = LocalContext.current
+        when (val u = vm.update) {
+            is UpdateState.Available -> Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Nova versão ${u.version} disponível", style = MaterialTheme.typography.titleSmall)
+                    Button(onClick = { openUrl(updCtx, u.url) }, modifier = Modifier.fillMaxWidth()) { Text("Baixar") }
+                }
+            }
+            UpdateState.Checking -> Text("Verificando atualizações…", style = MaterialTheme.typography.labelSmall)
+            is UpdateState.Failed -> Text("Atualização: ${u.msg}", style = MaterialTheme.typography.labelSmall)
+            else -> {}
+        }
+        TextButton(onClick = vm::checkForUpdates, enabled = vm.update !is UpdateState.Checking) { Text("Verificar atualizações") }
     }
+}
+
+private fun openUrl(ctx: android.content.Context, url: String) {
+    try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+    catch (_: Exception) { /* sem navegador: o link continua visível no cartão */ }
 }
 
 @Composable

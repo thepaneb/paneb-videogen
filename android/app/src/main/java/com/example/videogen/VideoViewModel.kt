@@ -25,6 +25,15 @@ import okio.source
 import java.io.File
 import java.util.UUID
 
+/** Resultado da consulta à Release mais recente no GitHub. */
+sealed interface UpdateState {
+    data object Idle : UpdateState
+    data object Checking : UpdateState
+    data object UpToDate : UpdateState
+    data class Available(val version: String, val url: String) : UpdateState
+    data class Failed(val msg: String) : UpdateState
+}
+
 class VideoViewModel(app: Application) : AndroidViewModel(app) {
     // Chave e URL em armazenamento criptografado (migra o valor antigo uma vez; fallback sem cripto se indisponível).
     private val prefs: android.content.SharedPreferences = run {
@@ -295,6 +304,26 @@ class VideoViewModel(app: Application) : AndroidViewModel(app) {
                 else -> "Falha: ${m.take(100)}"
             }
         } finally { testing = false }
+    }
+
+    /** Estado da verificação de nova versão (Release do GitHub). */
+    var update by mutableStateOf<UpdateState>(UpdateState.Idle)
+        private set
+
+    fun checkForUpdates() {
+        if (update is UpdateState.Checking) return
+        viewModelScope.launch {
+            update = UpdateState.Checking
+            update = try {
+                val rel = withContext(Dispatchers.IO) { fetchLatestRelease() }
+                val tag = rel?.tag_name?.trim().orEmpty()
+                if (tag.isEmpty() || !isNewerVersion(tag, BuildConfig.VERSION_NAME)) UpdateState.UpToDate
+                else {
+                    val apk = rel!!.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }
+                    UpdateState.Available(tag.removePrefix("v"), apk?.browser_download_url ?: rel.html_url)
+                }
+            } catch (e: Exception) { UpdateState.Failed(e.message?.take(120) ?: "falha de rede") }
+        }
     }
 
     /** Troca o servidor e a chave da API e reconecta (aceita URL com ou sem http/https e barra final). */

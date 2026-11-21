@@ -20,6 +20,17 @@ Kotlin · Jetpack Compose · Retrofit/kotlinx-serialization · Media3 (ExoPlayer
 
 O wrapper (`gradlew`, `gradle/wrapper/*`) está commitado: compile com `./gradlew :app:assembleDebug` (dentro de `android/`). O CI usa o mesmo wrapper, então o build é reproduzível.
 
+## Distribuição (GitHub Releases)
+
+Cada tag `v*` (ex.: `v0.3`) dispara o workflow `Release`, que compila o APK de debug e o publica
+como asset da Release (`videogen-v0.3.apk`). O app mostra a versão instalada em **Ajustes** e
+consulta `releases/latest` ao abrir a tela (sem autenticação; repositório público): se houver
+versão maior que a instalada, exibe um cartão com o botão **Baixar**, que abre o link no navegador
+— a instalação é concluída pelo usuário (fontes desconhecidas). É build de debug, assinado com a
+chave de desenvolvimento: assinar release com keystore próprio fica como passo futuro.
+
+O wrapper (`gradlew`, `gradle/wrapper/*`) está commitado: compile com `./gradlew :app:assembleDebug` (dentro de `android/`). O CI usa o mesmo wrapper, então o build é reproduzível.
+
 ## Estrutura
 
 `Api.kt` (DTOs e Retrofit) · `VideoViewModel.kt` (estado, polling, ações) · `MainActivity.kt` (telas Criar e Histórico).
