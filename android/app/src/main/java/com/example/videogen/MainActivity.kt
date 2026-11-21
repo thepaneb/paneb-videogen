@@ -1,5 +1,6 @@
 package com.example.videogen
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -44,6 +45,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.activity.viewModels
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -52,9 +54,18 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
+    private val vmWarm: VideoViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra("videogen.history", false)) vmWarm.tab = 1
         setContent { MaterialTheme { Surface { App() } } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("videogen.history", false)) vmWarm.tab = 1
     }
 }
 

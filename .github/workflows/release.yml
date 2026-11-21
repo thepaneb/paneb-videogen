@@ -19,6 +19,10 @@ jobs:
       - uses: actions/setup-java@v6
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v6
+      - name: Versão do app confere com a tag (evita "update" fantasma)
+        run: |
+          v=$(grep -oP 'versionName = "\K[^"]+' android/app/build.gradle.kts)
+          [ "$v" = "${GITHUB_REF_NAME#v}" ] || { echo "::error::versionName ($v) != tag (${GITHUB_REF_NAME#v})"; exit 1; }
       - name: Validar segredos FCM (falha cedo com mensagem clara)
         env:
           FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
