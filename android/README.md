@@ -1,10 +1,10 @@
 # App Android
 
-Kotlin · Jetpack Compose · Retrofit/kotlinx-serialization · Media3 (ExoPlayer) · Coil. `minSdk 26`, `compileSdk 34`.
+Kotlin · Jetpack Compose · Retrofit/kotlinx-serialization · Media3 (ExoPlayer) · Coil. `minSdk 26`, `compileSdk 37`, `targetSdk 34`.
 
 ## Rodar
 
-1. Instale o **Android Studio** (JDK 17+ e SDK 34 vêm junto) e abra **a pasta `android/`**. O Gradle wrapper já está commitado (`./gradlew`).
+1. Instale o **Android Studio** (JDK 17+ e SDK com a plataforma 37) e abra **a pasta `android/`**. O Gradle wrapper já está commitado (`./gradlew`).
 2. Crie `android/local.properties` (fora do Git) com a sua API:
    ```properties
    videogen.apiBaseUrl=http://10.0.2.2:3000/
@@ -18,7 +18,7 @@ Kotlin · Jetpack Compose · Retrofit/kotlinx-serialization · Media3 (ExoPlayer
 
 ## Wrapper do Gradle e CI
 
-O wrapper (`gradlew`, `gradle/wrapper/*`) está commitado: compile com `./gradlew :app:assembleDebug` (dentro de `android/`). O CI ainda usa `gradle` do sistema; trocar pelo wrapper deixa o build reproduzível.
+O wrapper (`gradlew`, `gradle/wrapper/*`) está commitado: compile com `./gradlew :app:assembleDebug` (dentro de `android/`). O CI usa o mesmo wrapper, então o build é reproduzível.
 
 ## Estrutura
 

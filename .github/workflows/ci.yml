@@ -22,9 +22,7 @@ jobs:
       - uses: actions/setup-java@v6
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v6
-        with: { gradle-version: "8.9" }
-      # Depois de commitar o Gradle wrapper (android/README.md), troque por ./gradlew
-      - run: gradle -p android :app:assembleDebug
+      - run: ./gradlew -p android :app:assembleDebug
 
   docker:
     runs-on: ubuntu-latest

@@ -2,7 +2,6 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
@@ -16,7 +15,7 @@ fun cfg(key: String, default: String): String =
 
 android {
     namespace = "com.example.videogen"
-    compileSdk = 34
+    compileSdk = 37
     defaultConfig {
         applicationId = "com.example.videogen"
         minSdk = 26
@@ -33,13 +32,7 @@ android {
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-}
-
-// JVM 17 em todos os módulos Kotlin (kotlinOptions foi removido no Kotlin 2.4).
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
+    // jvmTarget 17 vem do targetCompatibility acima (padrão do Kotlin embutido no AGP 9).
 }
 
 dependencies {
@@ -52,7 +45,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("androidx.security:security-crypto:1.1.0")
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.1")
+    implementation("com.squareup.okhttp3:okhttp:5.5.1")
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
     implementation("androidx.media3:media3-exoplayer:1.4.1")
