@@ -1,0 +1,22 @@
+# segredos e dados locais
+.env
+*.local
+*.log
+*.err
+backend/data/
+backend/data2/
+local.properties
+# Node
+node_modules/
+# Android / Gradle
+.gradle/
+build/
+*.apk
+*.aab
+.idea/
+*.iml
+captures/
+.cxx/
+# SO
+.DS_Store
+Thumbs.db

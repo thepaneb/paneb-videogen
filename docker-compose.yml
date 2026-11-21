@@ -1,0 +1,36 @@
+# Produção simples: API + Caddy (HTTPS automático). Uso: veja docs/deployment.md
+services:
+  api:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - videogen-data:/data
+      - ./backend/workflows:/app/workflows:ro
+    ports:
+      - "127.0.0.1:3000:3000"   # só loopback; o acesso externo passa pelo Caddy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # para COMFY_URL=http://host.docker.internal:8188
+    restart: unless-stopped
+    stop_grace_period: 150s   # dá tempo de terminar downloads em andamento no encerramento limpo
+
+  caddy:
+    image: caddy:2
+    environment:
+      VIDEOGEN_DOMAIN: ${VIDEOGEN_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  videogen-data:
+  caddy-data:
+  caddy-config:

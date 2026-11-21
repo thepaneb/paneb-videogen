@@ -1,0 +1,273 @@
+openapi: 3.1.0
+info:
+  title: VideoGen API
+  version: 0.3.0
+  description: |
+    Gera vídeos curtos a partir de prompt e imagens, com provedores intercambiáveis.
+    Fonte da verdade do contrato: `test/contract.test.ts` confere rotas e respostas contra este arquivo.
+servers:
+  - url: http://localhost:3000
+components:
+  securitySchemes:
+    appKey: { type: apiKey, in: header, name: X-App-Key }
+    metricsToken: { type: http, scheme: bearer }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties: { error: { type: string } }
+    Health:
+      type: object
+      required: [ok]
+      properties: { ok: { type: boolean } }
+    Features:
+      type: object
+      required: [image, lastImage, negativePrompt, cancel, seed, tune]
+      properties:
+        image: { type: boolean }
+        lastImage: { type: boolean }
+        negativePrompt: { type: boolean }
+        cancel: { type: boolean }
+        seed: { type: boolean }
+        tune: { type: array, items: { type: string }, description: "Ajustes finos suportados (ex.: promptEnhance, cfg, imgStrength, steps)" }
+    ProviderCapabilities:
+      type: object
+      required: [name, durations, aspects, qualities, features]
+      properties:
+        name: { type: string }
+        durations: { type: array, items: { type: integer } }
+        aspects: { type: array, items: { type: string, enum: ["9:16", "1:1", "16:9"] } }
+        qualities: { type: array, items: { type: string, enum: [low, std, pro] } }
+        features: { $ref: "#/components/schemas/Features" }
+    CapabilitiesResponse:
+      type: object
+      required: [default, promptEnhance, providers]
+      properties:
+        default: { type: string }
+        promptEnhance: { type: boolean, description: "true se POST /prompt/enhance está configurado" }
+        providers: { type: array, items: { $ref: "#/components/schemas/ProviderCapabilities" } }
+    Status:
+      type: string
+      enum: [queued, running, succeeded, failed, canceled]
+    JobParams:
+      type: object
+      required: [prompt, durationSec, aspect, quality, hasImage, hasLastImage]
+      properties:
+        prompt: { type: string }
+        negativePrompt: { type: string }
+        durationSec: { type: integer }
+        aspect: { type: string, enum: ["9:16", "1:1", "16:9"] }
+        quality: { type: string, enum: [low, std, pro] }
+        seed: { type: integer, description: "Seed efetiva (só em provedores com features.seed)" }
+        promptEnhance: { type: boolean, description: "Expansor de prompt do LTX (só comfyui)" }
+        cfg: { type: number, minimum: 0, maximum: 10, description: "Aderência ao prompt (só comfyui)" }
+        imgStrength: { type: number, minimum: 0, maximum: 1, description: "Força da imagem 0..1 (só comfyui)" }
+        steps: { type: string, enum: [low, std, high], description: "Cronograma do sampler (só comfyui)" }
+        hasImage: { type: boolean }
+        hasLastImage: { type: boolean }
+    Output:
+      type: object
+      required: [url, mime]
+      properties:
+        url: { type: string, description: "Link assinado e com validade (/files/...) ou URL remota de fallback" }
+        durationSec: { type: number }
+        mime: { type: string }
+    Job:
+      type: object
+      required: [id, provider, status, prompt, params, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        provider: { type: string }
+        status: { $ref: "#/components/schemas/Status" }
+        prompt: { type: string }
+        params: { $ref: "#/components/schemas/JobParams" }
+        output: { $ref: "#/components/schemas/Output" }
+        error: { type: string }
+        createdAt: { type: integer, description: "ms desde 1970" }
+        updatedAt: { type: integer }
+        progress: { type: number, minimum: 0, maximum: 1, nullable: true, description: "0 na fila; rodando: fração ao vivo do provedor (passos do sampler) ou ~tempo decorrido/mediana; 1 pronto; null em failed/canceled" }
+        etaSec: { type: integer, minimum: 0, nullable: true, description: "Segundos estimados até concluir (ritmo real ou mediana do provedor); null em failed/canceled" }
+    JobList:
+      type: object
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Job" } } }
+    RepeatRequest:
+      type: object
+      properties:
+        count: { type: integer, minimum: 1, description: "1 até MAX_VARIATIONS (padrão 4)" }
+        sameSeed: { type: boolean, description: "true reproduz a seed original (só com features.seed)" }
+        prompt: { type: string, description: "Substitui o prompt original" }
+        duration: { type: integer, description: "Substitui a duração (precisa estar nos durations do provedor)" }
+        aspect: { type: string, enum: ["9:16", "1:1", "16:9"], description: "Substitui a proporção" }
+        quality: { type: string, enum: [low, std, pro], description: "Substitui a qualidade" }
+        negativePrompt: { type: string, description: "Substitui o 'o que evitar'" }
+        promptEnhance: { type: boolean, description: "Substitui a expansão de prompt" }
+        cfg: { type: number, minimum: 0, maximum: 10, description: "Substitui a aderência ao prompt" }
+        imgStrength: { type: number, minimum: 0, maximum: 1, description: "Substitui a força da imagem" }
+        steps: { type: string, enum: [low, std, high], description: "Substitui o cronograma do sampler" }
+    RepeatResponse:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Job" } }
+        error: { type: string, description: "Presente em sucesso parcial: criou `items`, mas um dos pedidos falhou" }
+    EnhanceRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt: { type: string, minLength: 3, maxLength: 2000 }
+        provider: { type: string }
+        hasImage: { type: boolean }
+    EnhanceResponse:
+      type: object
+      required: [original, enhanced, provider, model]
+      properties:
+        original: { type: string }
+        enhanced: { type: string }
+        provider: { type: string }
+        model: { type: string }
+  responses:
+    Unauthorized: { description: Chave ausente ou inválida, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    NotFound: { description: Não encontrado (ou de outro usuário), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    BadRequest: { description: Validação, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    TooMany: { description: Limite diário atingido, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    BadGateway: { description: O provedor recusou ou falhou, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+security:
+  - appKey: []
+paths:
+  /healthz:
+    get:
+      summary: Verificação de saúde (sem autenticação)
+      security: []
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Health" } } } }
+  /openapi.yaml:
+    get:
+      summary: Este contrato (sem autenticação)
+      security: []
+      responses:
+        "200": { description: OpenAPI em YAML, content: { application/yaml: { schema: { type: string } } } }
+  /metrics:
+    get:
+      summary: Métricas Prometheus (exige METRICS_TOKEN; 404 se desabilitado)
+      security: [{ metricsToken: [] }]
+      responses:
+        "200": { description: Texto no formato Prometheus, content: { text/plain: { schema: { type: string } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /files/{name}:
+    get:
+      summary: Vídeo salvo (link assinado, Range suportado)
+      security: []
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+        - { name: exp, in: query, required: true, schema: { type: integer } }
+        - { name: sig, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Arquivo de vídeo, content: { video/mp4: { schema: { type: string, format: binary } } } }
+        "206": { description: Trecho do arquivo (Range) }
+        "416": { description: Intervalo fora do arquivo }
+        "403": { description: Link inválido ou expirado, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /capabilities:
+    get:
+      summary: Provedores habilitados e o que cada um suporta
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CapabilitiesResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /jobs:
+    get:
+      summary: Lista os jobs do usuário (mais novos primeiro)
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, maximum: 100, default: 30 } }
+        - { name: before, in: query, schema: { type: integer }, description: "createdAt (ms) para paginar" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/JobList" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      summary: Cria um job (idempotente com Idempotency-Key)
+      parameters:
+        - { name: Idempotency-Key, in: header, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt: { type: string, maxLength: 5000 }
+                provider: { type: string }
+                negativePrompt: { type: string }
+                duration: { type: integer }
+                aspect: { type: string, enum: ["9:16", "1:1", "16:9"] }
+                quality: { type: string, enum: [low, std, pro] }
+                seed: { type: integer, minimum: 0, maximum: 2147483647 }
+                promptEnhance: { type: boolean }
+                cfg: { type: number, minimum: 0, maximum: 10 }
+                imgStrength: { type: number, minimum: 0, maximum: 1 }
+                steps: { type: string, enum: [low, std, high] }
+                image: { type: string, format: binary }
+                lastImage: { type: string, format: binary }
+      responses:
+        "200": { description: Já existia um job com esta Idempotency-Key, content: { application/json: { schema: { $ref: "#/components/schemas/Job" } } } }
+        "201": { description: Criado, content: { application/json: { schema: { $ref: "#/components/schemas/Job" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+  /jobs/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      summary: Um job
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Job" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      summary: Remove o job, o vídeo e as imagens de entrada
+      responses:
+        "204": { description: Removido }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /jobs/{id}/cancel:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      summary: Cancela no provedor (quando suportado) e marca como canceled
+      responses:
+        "200": { description: Job atualizado, content: { application/json: { schema: { $ref: "#/components/schemas/Job" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Provedor não suporta cancelamento, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /jobs/{id}/repeat:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: Idempotency-Key, in: header, schema: { type: string }, description: "Cada item usa a chave `<chave>#<índice>`" }
+    post:
+      summary: Repete ou varia um job (mesmos parâmetros e imagens; nova seed, ou a mesma com sameSeed)
+      requestBody:
+        content: { application/json: { schema: { $ref: "#/components/schemas/RepeatRequest" } } }
+      responses:
+        "201": { description: Jobs criados (pode haver sucesso parcial com `error`), content: { application/json: { schema: { $ref: "#/components/schemas/RepeatResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Imagem de origem não está mais disponível, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+  /prompt/enhance:
+    post:
+      summary: Reescreve um prompt curto no estilo do modelo de vídeo (usa a API da Anthropic)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/EnhanceRequest" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EnhanceResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooMany" }
+        "501": { description: Não configurado (sem ANTHROPIC_API_KEY), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "502": { $ref: "#/components/responses/BadGateway" }

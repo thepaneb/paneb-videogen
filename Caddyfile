@@ -1,0 +1,15 @@
+# Com um domínio real em VIDEOGEN_DOMAIN o Caddy obtém e renova o certificado sozinho.
+# Com "localhost" ele usa um certificado interno (o navegador/Android vai desconfiar).
+{$VIDEOGEN_DOMAIN:localhost} {
+	request_body {
+		max_size 25MB
+	}
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+	reverse_proxy api:3000
+}
