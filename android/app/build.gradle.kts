@@ -29,11 +29,12 @@ android {
     }
     // Assinatura de release via keystore próprio (CI: segredos do GitHub; local: ~/.gradle/gradle.properties
     // com release.storeFile/storePassword/keyAlias/keyPassword — nunca commitar o .keystore).
+    // O caminho é relativo à raiz do projeto Android (android/): file() sozinho resolveria em android/app/.
     val ksFile = System.getenv("RELEASE_KEYSTORE_FILE") ?: (findProperty("release.storeFile") as String?).orEmpty()
     signingConfigs {
         create("release") {
             if (ksFile.isNotBlank()) {
-                storeFile = file(ksFile)
+                storeFile = rootProject.file(ksFile)
                 storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: findProperty("release.storePassword") as String?
                 keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: findProperty("release.keyAlias") as String?
                 keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: findProperty("release.keyPassword") as String?
