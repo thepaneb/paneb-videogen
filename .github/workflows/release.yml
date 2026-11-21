@@ -19,6 +19,22 @@ jobs:
       - uses: actions/setup-java@v6
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v6
+      - name: Validar segredos FCM (falha cedo com mensagem clara)
+        env:
+          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
+          FCM_APP_ID: ${{ secrets.FCM_APP_ID }}
+          FCM_API_KEY: ${{ secrets.FCM_API_KEY }}
+        run: |
+          if [ -z "$FCM_PROJECT_ID$FCM_APP_ID$FCM_API_KEY" ]; then
+            echo "FCM não configurado: push desligado neste build."
+          else
+            bad=0
+            for v in "$FCM_PROJECT_ID" "$FCM_APP_ID" "$FCM_API_KEY"; do
+              case "$v" in ""|*[!-~]*) bad=1;; esac
+            done
+            if [ $bad -eq 1 ]; then echo "::error::Segredo FCM vazio ou com espaços/quebras de linha (cole o valor puro)"; exit 1; fi
+            echo "Segredos FCM ok."
+          fi
       - run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/release.keystore
       - run: ./android/gradlew -p android :app:assembleRelease -Pvideogen.fcmProjectId="${{ secrets.FCM_PROJECT_ID }}" -Pvideogen.fcmAppId="${{ secrets.FCM_APP_ID }}" -Pvideogen.fcmApiKey="${{ secrets.FCM_API_KEY }}"
       - run: mv android/app/build/outputs/apk/release/app-release.apk videogen-${{ github.ref_name }}.apk
