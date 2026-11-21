@@ -58,16 +58,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (intent.getBooleanExtra("videogen.history", false)) vmWarm.tab = 1
+        intent.tabDestination()?.let { vmWarm.tab = it }
         setContent { MaterialTheme { Surface { App() } } }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.getBooleanExtra("videogen.history", false)) vmWarm.tab = 1
+        intent.tabDestination()?.let { vmWarm.tab = it }
     }
 }
+
+private fun Intent.tabDestination() = getIntExtra("videogen.tab", -1).takeIf { it in 0..2 }
 
 @Composable
 fun App(vm: VideoViewModel = viewModel()) {

@@ -325,6 +325,10 @@ class VideoViewModel(app: Application) : AndroidViewModel(app) {
         ApiAuth.appKey = k
         prefs.edit().putString("api_base_url", baseUrl).putString("api_app_key", k).apply()
         message = "Conectando…"
-        viewModelScope.launch { loadCaps(); if (caps?.providers.isNullOrEmpty()) message = "Sem conexão com a API." else { message = ""; refresh() } }
+        viewModelScope.launch {
+            testConnection().join() // atualiza o cartão de conexão (estado, latência, causa)
+            loadCaps()
+            if (caps?.providers.isNullOrEmpty()) message = "Sem conexão com a API." else { message = ""; refresh() }
+        }
     }
 }

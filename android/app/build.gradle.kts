@@ -20,8 +20,8 @@ android {
         applicationId = "com.example.videogen"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "0.7.2"
+        versionCode = 9
+        versionName = "0.8"
         // 10.0.2.2 = localhost do PC visto pelo emulador.
         buildConfigField("String", "API_BASE_URL", "\"${cfg("videogen.apiBaseUrl", "http://10.0.2.2:3000/")}\"")
         buildConfigField("String", "APP_KEY", "\"${cfg("videogen.appKey", "troque-esta-chave")}\"")
@@ -70,6 +70,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation(platform("com.google.firebase:firebase-bom:34.2.0"))
     implementation("com.google.firebase:firebase-messaging")
 }

@@ -1,9 +1,5 @@
 package com.example.videogen
 
-import android.app.PendingIntent
-import android.content.Intent
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
@@ -25,21 +21,4 @@ class PushService : FirebaseMessagingService() {
     }
 
     override fun onDestroy() { scope.cancel(); super.onDestroy() }
-}
-
-private fun showDoneNotification(ctx: android.content.Context, jobId: String, status: String) {
-    if (!NotificationManagerCompat.from(ctx).areNotificationsEnabled()) return
-    val open = PendingIntent.getActivity(
-        ctx, jobId.hashCode(),
-        Intent(ctx, MainActivity::class.java)
-            .putExtra("videogen.history", true)
-            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-    val title = when (status) { "succeeded" -> "Vídeo pronto"; "failed" -> "Falha ao gerar vídeo"; "canceled" -> "Geração cancelada"; else -> "Atualização do vídeo" }
-    val text = if (status == "succeeded") "Seu vídeo terminou de gerar — toque para ver." else "Toque para abrir o histórico."
-    val n = NotificationCompat.Builder(ctx, doneChannelId())
-        .setSmallIcon(R.drawable.ic_stat_video)
-        .setContentTitle(title).setContentText(text)
-        .setContentIntent(open).setAutoCancel(true).build()
-    try { NotificationManagerCompat.from(ctx).notify(jobId.hashCode(), n) } catch (_: SecurityException) { /* sem permissão */ }
 }

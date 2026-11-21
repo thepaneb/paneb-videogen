@@ -16,7 +16,8 @@ Stack: **Kotlin + Retrofit + kotlinx.serialization + Jetpack Compose + Material3
 - `BuildConfig.API_BASE_URL`/`APP_KEY` (de `local.properties`) são só o padrão inicial; o usuário pode trocar URL e chave na tela Ajustes (guardados em `EncryptedSharedPreferences`, com migração única do valor antigo).
 - DTOs com defaults tolerantes + `ignoreUnknownKeys`: o app nunca quebra se a API adicionar campos.
 - Upload por streaming (`RequestBody` sob demanda, sem carregar a foto inteira na RAM); salvamento via MediaStore (IS_PENDING) e compartilhamento do arquivo via `FileProvider` (com fallback para link).
-- Push (FCM): com `caps.push` e build configurado, o app registra o token em `POST /push/tokens` (ao carregar capabilities e no `onNewToken`) e mostra notificação ao concluir (serviço `PushService`, canal "Vídeos prontos", sem plugin `google-services` — inicialização manual via `BuildConfig`).
+- Push (FCM): com `caps.push` e build configurado, o app registra o token em `POST /push/tokens` (ao carregar capabilities e no `onNewToken`) e mostra notificação ao concluir (serviço `PushService`, canais "Vídeos prontos"/"Atualizações do app", sem plugin `google-services` — inicialização manual via `BuildConfig`).
+- Versão nova: checagem horária em background (`WorkManager`, só com rede) via `releases/latest`; se houver, notificação que abre nos Ajustes (onde está o Baixar). "Salvar e reconectar" roda o teste de conexão (atualiza o cartão) antes de recarregar capabilities/histórico.
 
 ## Material3 e conteúdo dinâmico
 

@@ -28,7 +28,8 @@ O wrapper (`gradlew`, `gradle/wrapper/*`) está commitado: compile com `./gradle
 
 Cada tag `v*` (ex.: `v0.4`) dispara o workflow `Release`, que compila o APK **release** assinado e o publica
 como asset (`videogen-v0.4.apk`). O app mostra a versão instalada em **Ajustes** e
-consulta `releases/latest` ao abrir a tela (sem autenticação; repositório público): se houver
+consulta `releases/latest` ao abrir a tela e de hora em hora em background (`WorkManager`, só com rede;
+notifica e abre nos Ajustes quando há versão maior): se houver
 versão maior que a instalada, exibe um cartão com o botão **Baixar**, que abre o link no navegador
 — a instalação é concluída pelo usuário (fontes desconhecidas).
 

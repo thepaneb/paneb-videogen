@@ -1,14 +1,17 @@
 package com.example.videogen
 
 import android.app.Application
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.os.Build
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 
 class VideoGenApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        ensurePushChannel(this)
+        ensureChannels(this)
         // Sem plugin google-services: inicialização manual. Vazio (builds do CI) = push desligado.
         if (fcmConfigured()) {
             val opts = com.google.firebase.FirebaseOptions.Builder()
@@ -18,16 +21,11 @@ class VideoGenApp : Application() {
                 .build()
             com.google.firebase.FirebaseApp.initializeApp(this, opts)
         }
+        // Checa versão nova a cada hora (só com rede); avisa por notificação se houver.
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "videogen-update-check", ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<UpdateCheckWorker>(1, TimeUnit.HOURS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build())
     }
 }
-
-private const val DONE_CHANNEL = "videogen_done"
-
-fun ensurePushChannel(ctx: android.content.Context) {
-    if (Build.VERSION.SDK_INT >= 26) {
-        ctx.getSystemService(NotificationManager::class.java)?.createNotificationChannel(
-            NotificationChannel(DONE_CHANNEL, "Vídeos prontos", NotificationManager.IMPORTANCE_DEFAULT))
-    }
-}
-
-fun doneChannelId() = DONE_CHANNEL
