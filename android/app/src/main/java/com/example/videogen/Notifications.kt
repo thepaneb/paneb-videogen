@@ -19,7 +19,12 @@ fun ensureChannels(ctx: Context) {
     m.createNotificationChannel(NotificationChannel(UPDATE_CHANNEL, "Atualizações do app", NotificationManager.IMPORTANCE_DEFAULT))
 }
 
-fun doneChannelId() = DONE_CHANNEL
+/** true se pode postar notificações (antes do Android 13 não precisa pedir). */
+fun hasNotifPermission(ctx: android.content.Context) =
+    android.os.Build.VERSION.SDK_INT < 33 ||
+        androidx.core.content.ContextCompat.checkSelfPermission(
+            ctx, android.Manifest.permission.POST_NOTIFICATIONS) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
 
 private fun openTabIntent(ctx: Context, tab: Int) =
     PendingIntent.getActivity(

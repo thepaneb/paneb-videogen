@@ -6,7 +6,8 @@
 |---|---|
 | **Criar** | (se ajustando: faixa "Ajustando job anterior" + Cancelar) → prompt → [Melhorar prompt] → "o que evitar" → imagem → duração → proporção → qualidade → [Ajustes finos (expansível): expandir prompt, força da imagem, CFG, passos] → botão Gerar |
 | **Histórico** | Cards por job: prompt (2 linhas) → `status · provedor · dd/mm hh:mm` → parâmetros (`3s · 9:16 · Padrão · seed …`) → progresso/ETA ou erro → ações por ícone |
-| **Ajustes** | URL base → chave da API → Salvar e reconectar → cartão de conexão (semáforo + latência + causa de falha + Testar) → versão instalada → [se houver release maior: cartão "Nova versão" + Baixar] + Verificar atualizações |
+| **Ajustes** | URL base → chave da API → Salvar e reconectar → cartão de conexão (semáforo + latência + causa de falha + Testar) → versão instalada → [se houver release maior: cartão "Nova versão" + Baixar] + Verificar atualizações → [se permissão negada: atalho para notificações do sistema] |
+| **Global** | Diálogo educativo de notificações na primeira abertura (explica os dois usos e só então pede ao sistema; "agora não" não insiste) |
 
 ## Componentes e quando usar
 

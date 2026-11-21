@@ -73,11 +73,24 @@ private fun Intent.tabDestination() = getIntExtra("videogen.tab", -1).takeIf { i
 
 @Composable
 fun App(vm: VideoViewModel = viewModel()) {
-    // Android 13+: pede permissão de notificação uma vez (push de "vídeo pronto").
-    val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    LaunchedEffect(Unit) {
-        if (android.os.Build.VERSION.SDK_INT >= 33) notifPerm.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    // Permissão de notificação: primeiro explica o porquê (diálogo próprio), depois pede ao sistema.
+    // Se negar, não insistimos — a tela Ajustes oferece o atalho para as configurações.
+    val ctx = LocalContext.current
+    var notifDialog by rememberSaveable { mutableStateOf(false) }
+    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        appPrefs(ctx).edit().putBoolean("notif_asked", true).apply()
+        notifDialog = false
     }
+    LaunchedEffect(Unit) {
+        if (!hasNotifPermission(ctx) && !appPrefs(ctx).getBoolean("notif_asked", false)) notifDialog = true
+    }
+    if (notifDialog) AlertDialog(
+        onDismissRequest = { notifDialog = false; appPrefs(ctx).edit().putBoolean("notif_asked", true).apply() },
+        title = { Text("Ativar notificações?") },
+        text = { Text("Avisamos quando seu vídeo fica pronto e quando há versão nova do app. Sem spam — só esses dois casos.") },
+        confirmButton = { TextButton(onClick = { notifLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS) }) { Text("Ativar") } },
+        dismissButton = { TextButton(onClick = { notifDialog = false; appPrefs(ctx).edit().putBoolean("notif_asked", true).apply() }) { Text("Agora não") } },
+    )
     Scaffold(bottomBar = {
         NavigationBar {
             NavigationBarItem(selected = vm.tab == 0, onClick = { vm.tab = 0 },
@@ -368,7 +381,29 @@ fun SettingsScreen(vm: VideoViewModel) {
             else -> {}
         }
         TextButton(onClick = vm::checkForUpdates, enabled = vm.update !is UpdateState.Checking) { Text("Verificar atualizações") }
+        // Se a permissão foi negada (com "não perguntar de novo" o sistema nem exibe), atalho para as configurações.
+        val setCtx = LocalContext.current
+        var notifOn by remember { mutableStateOf(hasNotifPermission(setCtx)) }
+        val setLo = setCtx as? LifecycleOwner
+        DisposableEffect(setLo) {
+            val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) notifOn = hasNotifPermission(setCtx) }
+            setLo?.lifecycle?.addObserver(obs)
+            onDispose { setLo?.lifecycle?.removeObserver(obs) }
+        }
+        if (!notifOn) Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Notificações desativadas", modifier = Modifier.weight(1f))
+            TextButton(onClick = { openAppSettings(setCtx) }) { Text("Ativar") }
+        }
     }
+}
+
+private fun openAppSettings(ctx: android.content.Context) {
+    try {
+        ctx.startActivity(android.content.Intent(
+            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            android.net.Uri.fromParts("package", ctx.packageName, null),
+        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (_: Exception) { /* sem app de configurações: mantém como está */ }
 }
 
 private fun openUrl(ctx: android.content.Context, url: String) {
