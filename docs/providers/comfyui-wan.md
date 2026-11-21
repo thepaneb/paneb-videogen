@@ -7,8 +7,9 @@ licença Apache 2.0 (uso comercial permitido).
 Diferente do [LTX](comfyui-ltx.md) (que pede 32 GB+ de VRAM no oficial), o Wan 2.2 5B foi feito para
 hardware modesto: a doc oficial indica que **roda com 8 GB de VRAM** (com offloading).
 
-Render real validado neste projeto: **RTX 3060 12 GB, clipe de 5 s em 384×640 (`low`) em ~3,5 min**
-(só texto; sem áudio). Template oficial intacto (cfg 5, 20 passos, denoise 1.0).
+Render real validado neste projeto: **RTX 3060 12 GB** — texto→vídeo de 5 s em 384×640 (`low`)
+em ~3,5 min; imagem→vídeo de 5 s em 544×960 (`std`, foto 1200×1600) em ~8 min.
+Só texto e sem áudio; template oficial intacto (cfg 5, 20 passos, denoise 1.0).
 
 ## 1. Requisitos
 
