@@ -18,7 +18,10 @@
       `GET /tasks`), traduzir `submitted/processing/succeeded/failed` e atualizar o guia.
 - [ ] Validar o provedor Kling legado com credenciais reais (5 s, `std`) e registrar custo/latência no guia.
 - [ ] Validar o provedor ComfyUI com um workflow LTX real; commitar um exemplo em `backend/workflows/`.
-- [ ] Commitar o Gradle wrapper (`gradle wrapper --gradle-version 8.9` em `android/`) e confirmar o build no CI.
+- [x] Commitar o Gradle wrapper (`gradle wrapper --gradle-version 8.9` em `android/`) e confirmar o build no CI.
+- [ ] **Upgrade do toolchain Android** (AGP 8.5→9.x, Gradle 8.9→9.x, compileSdk 34→37, okhttp 4→5, retrofit 3 já ok):
+      o AGP 9 embute o Kotlin (remove `org.jetbrains.kotlin.android`, ver https://kotl.in/gradle/agp-built-in-kotlin)
+      e o okhttp 5 exige compileSdk 37; tentativa local revertida (ver `dependabot.yml`, regra `ignore` para os majors).
 - [ ] Rodar `docker compose up` num servidor real e ajustar o que aparecer.
 
 ## Produto (próximos passos)

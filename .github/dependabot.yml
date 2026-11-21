@@ -4,6 +4,12 @@ updates:
   - package-ecosystem: gradle
     directory: /android
     schedule: { interval: weekly }
-    # okhttp 5.x exige compileSdk 37 (hoje 34 + AGP 8.5); reavaliar junto com o upgrade do SDK.
-    ignore: [{ dependency-name: "com.squareup.okhttp3:okhttp", update-types: ["version-update:semver-major"] }]
+    ignore:
+      # okhttp 5.x exige compileSdk 37 (hoje 34 + AGP 8.5); reavaliar junto com o upgrade do SDK.
+      - { dependency-name: "com.squareup.okhttp3:okhttp", update-types: ["version-update:semver-major"] }
+      # AGP 9.x embute o Kotlin (remove org.jetbrains.kotlin.android) e pede Gradle 9 + SDK novo:
+      # migração deliberada, não bump de rotina. Patches 8.x continuam vindo.
+      - { dependency-name: "com.android.application", update-types: ["version-update:semver-major"] }
+      # Gradle 9.x não é suportado pelo AGP 8.5; atualizar junto com o AGP 9.
+      - { dependency-name: "gradle-wrapper", update-types: ["version-update:semver-major"] }
   - { package-ecosystem: github-actions, directory: /, schedule: { interval: weekly } }
