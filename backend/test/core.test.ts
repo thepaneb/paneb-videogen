@@ -55,6 +55,59 @@ test("db: ciclo de vida, idempotência e jobs ativos", async () => {
   assert.equal(db.getJob("j1"), undefined);
 });
 
+test("comfyui-wan: submit preenche placeholders, poll normaliza e exige imagem no I2V", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "videogen-wan-"));
+  const t2v = path.join(dir, "wan2-t2v.api.json"), i2v = path.join(dir, "wan2-i2v.api.json");
+  const base: any = {
+    "1": { class_type: "UNETLoader", inputs: { unet_name: "w.safetensors", weight_dtype: "default" } },
+    "2": { class_type: "CLIPLoader", inputs: { clip_name: "u.safetensors", type: "wan", device: "default" } },
+    "3": { class_type: "VAELoader", inputs: { vae_name: "v.safetensors" } },
+    "4": { class_type: "Wan22ImageToVideoLatent", inputs: { vae: ["3", 0], width: "{{width}}", height: "{{height}}", length: "{{frames}}", batch_size: 1 } },
+    "5": { class_type: "CLIPTextEncode", inputs: { text: "{{prompt}}", clip: ["2", 0] } },
+    "6": { class_type: "CLIPTextEncode", inputs: { text: "{{negative}}", clip: ["2", 0] } },
+    "7": { class_type: "KSampler", inputs: { model: ["1", 0], seed: "{{seed}}", steps: 20, cfg: 5, sampler_name: "uni_pc", scheduler: "simple", positive: ["5", 0], negative: ["6", 0], latent_image: ["4", 0], denoise: 1 } },
+    "8": { class_type: "CreateVideo", inputs: { images: ["7", 0], fps: "{{fps}}" } },
+    "9": { class_type: "SaveVideo", inputs: { video: ["8", 0], filename_prefix: "{{prefix}}", format: "auto", codec: "auto" } },
+  };
+  fs.writeFileSync(t2v, JSON.stringify(base));
+  const i2vWf = JSON.parse(JSON.stringify(base));
+  i2vWf["10"] = { class_type: "LoadImage", inputs: { image: "{{image}}" } };
+  i2vWf["4"].inputs.start_image = ["10", 0];
+  fs.writeFileSync(i2v, JSON.stringify(i2vWf));
+  process.env.COMFY_WORKFLOW_WAN = t2v;
+  process.env.COMFY_WORKFLOW_WAN_I2V = i2v;
+  let posted: any = null;
+  const calls: string[] = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = (async (url: any, init: any) => {
+    const u = String(url);
+    calls.push(`${init?.method ?? "GET"} ${u}`);
+    if (u.endsWith("/upload/image")) return new Response(JSON.stringify({ name: "j.png", subfolder: "" }), { status: 200 });
+    if (u.endsWith("/prompt")) { posted = JSON.parse(String(init.body)); return new Response(JSON.stringify({ prompt_id: "p1" }), { status: 200 }); }
+    if (u.includes("/history/")) return new Response(JSON.stringify({ p1: { outputs: { "9": { videos: [{ filename: "v.mp4", subfolder: "", type: "output" }] } }, status: { completed: true } } }), { status: 200 });
+    return new Response(JSON.stringify({ queue_running: [], queue_pending: [] }), { status: 200 });
+  }) as any;
+  try {
+    const { comfyWanProvider } = await import("../src/providers/comfyui-wan.js");
+    assert.deepEqual([comfyWanProvider.caps.name, comfyWanProvider.caps.features.tune], ["comfyui-wan", []]);
+    const p = { prompt: "gato", durationSec: 5, aspect: "16:9", quality: "std", negativePrompt: "borrado" } as any;
+    const id = await comfyWanProvider.submit({ ...p, image: { buffer: Buffer.from("x"), mime: "image/png" } }, "job1");
+    assert.equal(id, "p1");
+    const g = posted.prompt;
+    assert.deepEqual([g["4"].inputs.width, g["4"].inputs.height, g["4"].inputs.length], [960, 544, 121]);
+    assert.deepEqual([g["5"].inputs.text, g["6"].inputs.text], ["gato", "borrado"]);
+    assert.equal(typeof g["7"].inputs.seed, "number");
+    assert.equal(g["9"].inputs.filename_prefix, "videogen/job1");
+    const r = await comfyWanProvider.poll("p1");
+    assert.equal(r.status, "succeeded");
+    assert.match(r.remoteUrl!, /\/view\?filename=v\.mp4/);
+    await comfyWanProvider.cancel!("p1");
+    assert.ok(calls.some((c) => c.startsWith("POST ") && c.endsWith("/queue")));
+    delete process.env.COMFY_WORKFLOW_WAN; // só resta o I2V: sem imagem tem que falhar
+    await assert.rejects(comfyWanProvider.submit(p, "job2"), /exige uma imagem/);
+  } finally { globalThis.fetch = orig; fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("kling: id do job carrega o tipo e poll normaliza o status", async () => {
   process.env.KLING_ACCESS_KEY = "ak"; process.env.KLING_SECRET_KEY = "secret";
   const calls: string[] = [];
