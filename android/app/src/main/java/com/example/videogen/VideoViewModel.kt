@@ -35,22 +35,8 @@ sealed interface UpdateState {
 }
 
 class VideoViewModel(app: Application) : AndroidViewModel(app) {
-    // Chave e URL em armazenamento criptografado (migra o valor antigo uma vez; fallback sem cripto se indisponível).
-    private val prefs: android.content.SharedPreferences = run {
-        val legacy = app.getSharedPreferences("videogen", android.content.Context.MODE_PRIVATE)
-        try {
-            val alias = androidx.security.crypto.MasterKeys.getOrCreate(androidx.security.crypto.MasterKeys.AES256_GCM_SPEC)
-            val enc = androidx.security.crypto.EncryptedSharedPreferences.create(
-                "videogen-enc", alias, app,
-                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
-            if (!enc.contains("api_base_url") && legacy.contains("api_base_url")) {
-                enc.edit().putString("api_base_url", legacy.getString("api_base_url", null))
-                    .putString("api_app_key", legacy.getString("api_app_key", null)).apply()
-            }
-            enc
-        } catch (_: Exception) { legacy }
-    }
+    // Chave e URL em armazenamento criptografado (ver appPrefs); só o padrão inicial vem de BuildConfig.
+    private val prefs: android.content.SharedPreferences = appPrefs(app)
 
     /** URL base da API e chave de acesso, editáveis na tela Ajustes e guardados no aparelho. */
     var baseUrl by mutableStateOf(prefs.getString("api_base_url", BuildConfig.API_BASE_URL) ?: BuildConfig.API_BASE_URL)
@@ -93,7 +79,11 @@ class VideoViewModel(app: Application) : AndroidViewModel(app) {
     fun viewModelScopeReload() { viewModelScope.launch { loadCaps(); refresh() } }
 
     suspend fun loadCaps() {
-        try { caps = api.capabilities().also { selectProvider(it.default, it) }; message = "" }
+        try {
+            caps = api.capabilities().also { selectProvider(it.default, it); message = "" }
+            // Push: registra o aparelho para ser avisado ao concluir (só se servidor e build suportam).
+            if (caps?.push == true && fcmConfigured()) fetchFcmToken()?.let { registerPushToken(getApplication(), it) }
+        }
         catch (e: Exception) { message = "Sem conexão com a API: ${e.message}" }
     }
 

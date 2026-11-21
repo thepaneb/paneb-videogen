@@ -5,9 +5,10 @@ import path from "node:path";
 import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { loadUsers, userFor } from "./auth.js";
 import { signFile, verifyFile } from "./signing.js";
-import { countActive, countSince, deleteJobFor, FILES_DIR, getByIdem, getJob, getJobFor, insertJob, listJobs, medianSucceededMs, updateJob } from "./db.js";
+import { addPushToken, countActive, countSince, deleteJobFor, FILES_DIR, getByIdem, getJob, getJobFor, insertJob, listJobs, medianSucceededMs, removePushToken, updateJob } from "./db.js";
 import { hasImageMagic, loadInput, removeInputs, saveInput } from "./inputs.js";
 import { enhanceConfig, enhancePrompt } from "./enhance.js";
+import { pushAvailable } from "./push.js";
 import { GenParams, Job, StoredParams, TERMINAL, VideoProvider } from "./model.js";
 import { defaultProvider, registry } from "./providers/index.js";
 import { log } from "./log.js";
@@ -165,7 +166,7 @@ export function createApp() {
   }
 
   app.get("/capabilities", (_req, res) =>
-    res.json({ default: defaultProvider(), promptEnhance: !!enhanceConfig(), providers: Object.values(registry()).map((p) => p.caps) }));
+    res.json({ default: defaultProvider(), promptEnhance: !!enhanceConfig(), push: pushAvailable(), providers: Object.values(registry()).map((p) => p.caps) }));
 
   app.post("/jobs", upload, async (req, res) => {
     try {
@@ -322,8 +323,25 @@ export function createApp() {
     res.status(204).end();
   });
 
-  app.post("/prompt/enhance", async (req, res) => {
-    const cfg = enhanceConfig();
+  // Push (FCM): o app registra o token do aparelho e é avisado ao concluir o job.
+  const pushTokenOf = (body: any): string | null => {
+    const t = typeof body?.token === "string" ? body.token.trim() : "";
+    return /^[A-Za-z0-9:_-]{20,256}$/.test(t) ? t : null;
+  };
+  app.post("/push/tokens", async (req, res) => {
+    const t = pushTokenOf(req.body);
+    if (!t) return fail(res, 400, "token inválido");
+    addPushToken(me(res), t);
+    res.status(201).json({ ok: true });
+  });
+  app.delete("/push/tokens", async (req, res) => {
+    const t = pushTokenOf(req.body);
+    if (!t) return fail(res, 400, "token inválido");
+    removePushToken(me(res), t);
+    res.status(204).end();
+  });
+
+  app.post("/prompt/enhance", async (req, res) => {    const cfg = enhanceConfig();
     if (!cfg) return fail(res, 501, "aprimorador de prompt não configurado (ANTHROPIC_API_KEY)");
     const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
     if (prompt.length < 3 || prompt.length > 2000) return fail(res, 400, "prompt deve ter de 3 a 2000 caracteres");

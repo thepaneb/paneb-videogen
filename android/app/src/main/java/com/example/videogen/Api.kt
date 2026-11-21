@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
     val name: String, val durations: List<Int>, val aspects: List<String>,
     val qualities: List<String>, val features: Features = Features(),
 )
-@Serializable data class CapsDto(val default: String, val providers: List<ProviderCaps>, val promptEnhance: Boolean = false)
+@Serializable data class CapsDto(val default: String, val providers: List<ProviderCaps>, val promptEnhance: Boolean = false, val push: Boolean = false)
 @Serializable data class OutputDto(val url: String, val durationSec: Double? = null)
 @Serializable data class JobDto(
     val id: String, val provider: String = "", val status: String = "queued", val prompt: String = "",
@@ -45,6 +45,7 @@ import java.util.concurrent.TimeUnit
 @Serializable data class RepeatDto(val items: List<JobDto> = emptyList(), val error: String? = null)
 @Serializable data class EnhanceBody(val prompt: String, val provider: String? = null, val hasImage: Boolean = false)
 @Serializable data class EnhanceDto(val enhanced: String)
+@Serializable data class PushTokenBody(val token: String)
 
 interface VideoApi {
     @GET("capabilities") suspend fun capabilities(): CapsDto
@@ -70,6 +71,7 @@ interface VideoApi {
     @POST("jobs/{id}/cancel") suspend fun cancel(@Path("id") id: String): JobDto
     @POST("jobs/{id}/repeat") suspend fun repeat(@Path("id") id: String, @Body body: RepeatBody): RepeatDto
     @POST("prompt/enhance") suspend fun enhance(@Body body: EnhanceBody): EnhanceDto
+    @POST("push/tokens") suspend fun pushToken(@Body body: PushTokenBody): retrofit2.Response<Unit>
     @DELETE("jobs/{id}") suspend fun delete(@Path("id") id: String): Response<Unit>
 }
 
@@ -110,3 +112,46 @@ object ApiFactory {
     /** Instância padrão (BuildConfig); prefira apiFor(baseUrl) para trocar de servidor sem rebuild. */
     val api: VideoApi by lazy { apiFor(BuildConfig.API_BASE_URL) }
 }
+
+/** Push (FCM) configurado neste build? Sem as chaves do Firebase, o push fica desligado. */
+fun fcmConfigured() = BuildConfig.FCM_PROJECT_ID.isNotEmpty()
+    && BuildConfig.FCM_APP_ID.isNotEmpty() && BuildConfig.FCM_API_KEY.isNotEmpty()
+
+/** Prefs com a URL/chave da API (mesma migração do ViewModel: criptografadas, com fallback). */
+fun appPrefs(ctx: android.content.Context): android.content.SharedPreferences {
+    val legacy = ctx.getSharedPreferences("videogen", android.content.Context.MODE_PRIVATE)
+    return try {
+        val alias = androidx.security.crypto.MasterKeys.getOrCreate(androidx.security.crypto.MasterKeys.AES256_GCM_SPEC)
+        androidx.security.crypto.EncryptedSharedPreferences.create(
+            "videogen-enc", alias, ctx,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
+            .also { enc ->
+                if (!enc.contains("api_base_url") && legacy.contains("api_base_url")) {
+                    enc.edit().putString("api_base_url", legacy.getString("api_base_url", null))
+                        .putString("api_app_key", legacy.getString("api_app_key", null)).apply()
+                }
+            }
+    } catch (_: Exception) { legacy }
+}
+
+/** Registra o token FCM no backend (melhor esforço: nunca quebra o app). */
+suspend fun registerPushToken(ctx: android.content.Context, token: String) {
+    try {
+        val p = appPrefs(ctx)
+        val base = p.getString("api_base_url", BuildConfig.API_BASE_URL) ?: BuildConfig.API_BASE_URL
+        val key = p.getString("api_app_key", BuildConfig.APP_KEY) ?: BuildConfig.APP_KEY
+        if (key.isBlank()) return
+        ApiAuth.appKey = key
+        apiFor(base).pushToken(PushTokenBody(token))
+    } catch (_: Exception) { /* rede/config: tenta de novo no próximo token ou abertura */ }
+}
+
+/** Token FCM deste aparelho (null sem Play Services/rede). */
+suspend fun fetchFcmToken(): String? = try {
+    kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { cont.resume(it) {} }
+            .addOnFailureListener { cont.resume(null) {} }
+    }
+} catch (_: Exception) { null }

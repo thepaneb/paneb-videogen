@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -59,6 +60,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun App(vm: VideoViewModel = viewModel()) {
+    // Android 13+: pede permissão de notificação uma vez (push de "vídeo pronto").
+    val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= 33) notifPerm.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
     Scaffold(bottomBar = {
         NavigationBar {
             NavigationBarItem(selected = vm.tab == 0, onClick = { vm.tab = 0 },

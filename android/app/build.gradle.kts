@@ -20,11 +20,15 @@ android {
         applicationId = "com.example.videogen"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.4"
+        versionCode = 4
+        versionName = "0.5"
         // 10.0.2.2 = localhost do PC visto pelo emulador.
         buildConfigField("String", "API_BASE_URL", "\"${cfg("videogen.apiBaseUrl", "http://10.0.2.2:3000/")}\"")
         buildConfigField("String", "APP_KEY", "\"${cfg("videogen.appKey", "troque-esta-chave")}\"")
+        // Push (FCM): projeto Firebase criado no console; vazio = push desligado (builds do CI).
+        buildConfigField("String", "FCM_PROJECT_ID", "\"${cfg("videogen.fcmProjectId", "")}\"")
+        buildConfigField("String", "FCM_APP_ID", "\"${cfg("videogen.fcmAppId", "")}\"")
+        buildConfigField("String", "FCM_API_KEY", "\"${cfg("videogen.fcmApiKey", "")}\"")
         manifestPlaceholders["usesCleartext"] = "false"
     }
     // Assinatura de release via keystore próprio (CI: segredos do GitHub; local: ~/.gradle/gradle.properties
@@ -66,4 +70,6 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation(platform("com.google.firebase:firebase-bom:34.2.0"))
+    implementation("com.google.firebase:firebase-messaging")
 }

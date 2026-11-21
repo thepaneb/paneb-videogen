@@ -172,6 +172,19 @@ test("contrato: aprimorar prompt (chamada à Anthropic simulada)", async () => {
   assert.equal((await call("POST", "/prompt/enhance", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: "x" }) })).status, 400);
 });
 
+test("contrato: push tokens (registro, validação, remoção)", async () => {
+  assert.equal((await call("GET", "/capabilities")).body.push, false); // sem FCM no ambiente de teste
+  const tok = "d".repeat(64) + ":APA91b" + "e".repeat(64);
+  const reg = (body: any) => call("POST", "/push/tokens", { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, "/push/tokens");
+  assert.equal((await reg({ token: tok })).status, 201);
+  assert.equal((await reg({ token: tok })).status, 201); // idempotente
+  assert.equal((await reg({})).status, 400);
+  assert.equal((await reg({ token: "curto" })).status, 400);
+  const del = (body: any) => call("DELETE", "/push/tokens", { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, "/push/tokens");
+  assert.equal((await del({ token: tok })).status, 204);
+  assert.equal((await del({ token: "x".repeat(300) })).status, 400);
+});
+
 test("contrato: /metrics exige token e expõe contadores", async () => {
   assert.equal((await call("GET", "/metrics", { headers: {} })).status, 401);
   const res = await realFetch(base + "/metrics", { headers: { Authorization: "Bearer tok" } });

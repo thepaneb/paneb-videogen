@@ -9,6 +9,10 @@ Kotlin · Jetpack Compose · Retrofit/kotlinx-serialization · Media3 (ExoPlayer
    ```properties
    videogen.apiBaseUrl=http://10.0.2.2:3000/
    videogen.appKey=<mesmo APP_KEY do backend>
+   # Push (opcional; exige projeto no console do Firebase):
+   #videogen.fcmProjectId=<project id>
+   #videogen.fcmAppId=<app id do app Android>
+   #videogen.fcmApiKey=<api key>
    ```
    Emulador: `10.0.2.2` é o `localhost` do PC. Celular real: IP do PC na rede, ou túnel/VPN (Tailscale). Em `release`
    use **HTTPS** (texto puro só é permitido no build `debug`).
@@ -47,6 +51,22 @@ O APK de release é assinado com um keystore próprio no CI. Para configurar:
 Quem instalou o APK de **debug** (assinatura do PC ou do runner) precisa **desinstalar antes** de instalar
 o de release: o Android não permite atualizar um app para outra assinatura. Daqui em diante, todas as
 Releases usam a mesma assinatura e atualizam normalmente (o cartão de "Nova versão" no app já aponta para elas).
+
+### Push: avisar quando o vídeo fica pronto
+
+1. No [console do Firebase](https://console.firebase.google.com), crie um projeto e adicione um app
+   Android com o pacote `com.example.videogen` (SHA-1 opcional). Anote **project id**, **app id** e **api key**.
+2. No backend (`.env`, fora do Git): `FCM_PROJECT_ID=<project id>` e `FIREBASE_SERVICE_ACCOUNT=`
+   com o JSON da conta de serviço (Console GCP → IAM → Contas de serviço → Chaves → Criar chave JSON)
+   — ou o caminho do arquivo. Sem isso, `capabilities.push` é `false` e nada é enviado.
+3. No app (`android/local.properties`, fora do Git): `videogen.fcmProjectId`, `videogen.fcmAppId` e
+   `videogen.fcmApiKey` com os mesmos valores do passo 1, e recompile. Builds sem esses valores
+   (incluindo os do CI) simplesmente não registram token — o resto funciona normal.
+4. No celular, aceite a permissão de **notificações** na primeira abertura. Ao concluir um job
+   (pronto, falha ou cancelado), chega a notificação — tocar abre o app.
+
+Notas: a mensagem de push leva só `jobId`+`status` (sem prompt/imagens — dado mínimo para terceiros);
+tokens mortos (app desinstalado) são removidos sozinhos no primeiro envio falho.
 
 O wrapper (`gradlew`, `gradle/wrapper/*`) está commitado: compile com `./gradlew :app:assembleDebug` (dentro de `android/`). O CI usa o mesmo wrapper, então o build é reproduzível.
 

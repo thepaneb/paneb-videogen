@@ -10,12 +10,13 @@ usuário e só enxerga os próprios jobs, os de outros respondem `404`). Sem cha
 
 | Método e rota | Descrição |
 |---|---|
-| `GET /capabilities` | Provedores habilitados e o que cada um suporta; `promptEnhance` indica se o aprimorador está ligado |
+| `GET /capabilities` | Provedores habilitados e o que cada um suporta; `promptEnhance` indica se o aprimorador está ligado; `push` indica se o push (FCM) está configurado |
 | `POST /jobs` | Cria um job (`multipart`): `prompt`, `provider`, `negativePrompt`, `duration`, `aspect`, `quality`, `seed`, `image`, `lastImage`, `promptEnhance`, `cfg`, `imgStrength`, `steps` (`low`/`std`/`high`). `Idempotency-Key` opcional |
 | `GET /jobs` · `GET /jobs/:id` | Lista (`limit`, `before`) · um job |
 | `POST /jobs/:id/repeat` | **Repete/varia** um job: `{ count (1..MAX_VARIATIONS), sameSeed, prompt, duration, aspect, quality, negativePrompt, promptEnhance, cfg, imgStrength, steps }` (só o que for enviado sobrescreve). Reusa parâmetros e imagens guardadas |
 | `POST /jobs/:id/cancel` · `DELETE /jobs/:id` | Cancela · remove job, vídeo e imagens de entrada |
 | `POST /prompt/enhance` | `{ prompt, provider?, hasImage? }` → `{ enhanced }` ([guia](prompt-enhancement.md)) |
+| `POST /push/tokens` · `DELETE /push/tokens` | Registra/remove o token FCM do aparelho (`{ token }`); o worker avisa ao concluir cada job |
 | `GET /healthz` · `GET /metrics` | Saúde · métricas Prometheus ([observabilidade](observability.md)) |
 | `GET /files/<arquivo>?exp=&sig=` | Vídeo (link assinado, com validade, Range) |
 

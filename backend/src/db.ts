@@ -35,6 +35,12 @@ const MIGRATIONS: { version: number; sql: string }[] = [
     ALTER TABLE jobs_new RENAME TO jobs;
     CREATE INDEX jobs_status ON jobs(status);
     CREATE INDEX jobs_user_created ON jobs(user_id, created_at);` },
+  { version: 3, sql: `
+    CREATE TABLE push_tokens (
+      user_id TEXT NOT NULL, token TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, token)
+    );` },
 ];
 
 function migrate() {
@@ -88,6 +94,15 @@ export const countSince = (userId: string, t: number) =>
   Number((db.prepare("SELECT COUNT(*) AS n FROM jobs WHERE user_id=? AND created_at>=?").get(userId, t) as any).n);
 export const deleteJob = (id: string) => { db.prepare("DELETE FROM jobs WHERE id=?").run(id); };
 export const deleteJobFor = (userId: string, id: string) => { db.prepare("DELETE FROM jobs WHERE id=? AND user_id=?").run(id, userId); };
+// Tokens de push (FCM) por usuário. INSERT OR IGNORE: registrar de novo é idempotente.
+export const addPushToken = (userId: string, token: string) =>
+  db.prepare("INSERT OR IGNORE INTO push_tokens (user_id, token, created_at) VALUES (?,?,?)").run(userId, token, Date.now());
+export const removePushToken = (userId: string, token: string) =>
+  db.prepare("DELETE FROM push_tokens WHERE user_id=? AND token=?").run(userId, token);
+export const removePushTokenEverywhere = (token: string) =>
+  db.prepare("DELETE FROM push_tokens WHERE token=?").run(token);
+export const listPushTokens = (userId: string): string[] =>
+  (db.prepare("SELECT token FROM push_tokens WHERE user_id=?").all(userId) as any[]).map((r) => r.token);
 
 export function updateJob(id: string, p: { status?: Status; output?: Output; error?: string; attempts?: number }) {
   const cur = getJob(id)!;

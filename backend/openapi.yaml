@@ -41,11 +41,17 @@ components:
         features: { $ref: "#/components/schemas/Features" }
     CapabilitiesResponse:
       type: object
-      required: [default, promptEnhance, providers]
+      required: [default, promptEnhance, push, providers]
       properties:
         default: { type: string }
         promptEnhance: { type: boolean, description: "true se POST /prompt/enhance está configurado" }
+        push: { type: boolean, description: "true se o push (FCM) está configurado" }
         providers: { type: array, items: { $ref: "#/components/schemas/ProviderCapabilities" } }
+    PushTokenRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, minLength: 20, maxLength: 256, description: "Token FCM do aparelho" }
     Status:
       type: string
       enum: [queued, running, succeeded, failed, canceled]
@@ -271,3 +277,22 @@ paths:
         "429": { $ref: "#/components/responses/TooMany" }
         "501": { description: Não configurado (sem ANTHROPIC_API_KEY), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "502": { $ref: "#/components/responses/BadGateway" }
+  /push/tokens:
+    post:
+      summary: Registra o token FCM do aparelho (avisado ao concluir cada job)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PushTokenRequest" } } }
+      responses:
+        "201": { description: Registrado, content: { application/json: { schema: { type: object, required: [ok], properties: { ok: { type: boolean } } } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      summary: Remove o token FCM do aparelho
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PushTokenRequest" } } }
+      responses:
+        "204": { description: Removido }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }

@@ -7,6 +7,7 @@ import { Job, Status } from "./model.js";
 import { log } from "./log.js";
 import * as m from "./metrics.js";
 import { registry } from "./providers/index.js";
+import { pushJobFinished } from "./push.js";
 
 const TIMEOUT_MS = (() => {
   const v = Number(process.env.JOB_TIMEOUT_MIN ?? 15);
@@ -51,6 +52,7 @@ async function store(jobId: string, remoteUrl: string): Promise<string> {
 const done = (job: Job, status: Status) => {
   m.recordFinish(job.provider, status, job.createdAt);
   log.info("job concluído", { job: job.id, provider: job.provider, status, seconds: Math.round((Date.now() - job.createdAt) / 1000) });
+  void pushJobFinished(job.userId, job.id, status); // melhor esforço: nunca trava a fila
 };
 
 async function advance(job: Job) {

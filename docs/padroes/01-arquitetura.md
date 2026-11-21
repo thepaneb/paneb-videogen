@@ -23,6 +23,7 @@ segundo plano e baixa o vídeo para `backend/data/videos`.
 | `auth.ts`, `signing.ts` | Chaves → usuário (SHA-256); links HMAC com expiração para `/files` |
 | `app.ts` | `createApp()`: rotas, validação contra `capabilities`, idempotência, cota |
 | `server.ts` | Processo: sobe app + worker, encerramento limpo (SIGTERM/SIGINT) |
+| `push.ts` | Envio de push (FCM HTTP v1, OAuth2 com a conta de serviço; sem dependência nova) |
 | `enhance.ts` | Aprimorador de prompt (Anthropic; só texto, nunca imagens de usuários) |
 
 Regras de dependência: rotas dependem de provedores via `registry()`; provedores **não** importam
@@ -34,7 +35,7 @@ do polling vive em `worker.ts`).
 
 1. `POST /jobs` valida contra `capabilities` (duração, proporção, qualidade, seed) → `submit` no provedor → grava `queued`.
 2. A cada 4 s o worker chama `poll(providerJobId)`; erro transitório conta tentativa (máx. 5), estado terminal ou timeout (`JOB_TIMEOUT_MIN`) fecha o job.
-3. No `succeeded`, o worker baixa o vídeo (`store`; fallback para URL remota) e grava `output.url` **sem assinatura**; a assinatura HMAC (`exp`+`sig`) é aplicada só no DTO de saída.
+3. No `succeeded`, o worker baixa o vídeo (`store`; fallback para URL remota) e grava `output.url` **sem assinatura**; a assinatura HMAC (`exp`+`sig`) é aplicada só no DTO de saída. Em todo estado terminal o worker também dispara o push (FCM) para os aparelhos registrados.
 4. O app lê `GET /jobs` (com `progress`/`etaSec` calculados — estimativa, não medição) e toca via `/files`.
 
 ## Contratos entre camadas
