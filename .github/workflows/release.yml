@@ -46,7 +46,7 @@ jobs:
       - run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/release.keystore
       - run: ./android/gradlew -p android :app:assembleRelease -Pvideogen.fcmProjectId="${{ secrets.FCM_PROJECT_ID }}" -Pvideogen.fcmAppId="${{ secrets.FCM_APP_ID }}" -Pvideogen.fcmApiKey="${{ secrets.FCM_API_KEY }}"
       - run: mv android/app/build/outputs/apk/release/app-release.apk videogen-${{ github.ref_name }}.apk
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: videogen-${{ github.ref_name }}.apk
           generate_release_notes: true
