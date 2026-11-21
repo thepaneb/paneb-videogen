@@ -3,6 +3,8 @@
 *.local
 *.log
 *.err
+*.keystore
+*.jks
 backend/data/
 backend/data2/
 local.properties

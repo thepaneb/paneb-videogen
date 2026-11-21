@@ -22,12 +22,31 @@ O wrapper (`gradlew`, `gradle/wrapper/*`) está commitado: compile com `./gradle
 
 ## Distribuição (GitHub Releases)
 
-Cada tag `v*` (ex.: `v0.3`) dispara o workflow `Release`, que compila o APK de debug e o publica
-como asset da Release (`videogen-v0.3.apk`). O app mostra a versão instalada em **Ajustes** e
+Cada tag `v*` (ex.: `v0.4`) dispara o workflow `Release`, que compila o APK **release** assinado e o publica
+como asset (`videogen-v0.4.apk`). O app mostra a versão instalada em **Ajustes** e
 consulta `releases/latest` ao abrir a tela (sem autenticação; repositório público): se houver
 versão maior que a instalada, exibe um cartão com o botão **Baixar**, que abre o link no navegador
-— a instalação é concluída pelo usuário (fontes desconhecidas). É build de debug, assinado com a
-chave de desenvolvimento: assinar release com keystore próprio fica como passo futuro.
+— a instalação é concluída pelo usuário (fontes desconhecidas).
+
+### Assinatura de release (uma vez)
+
+O APK de release é assinado com um keystore próprio no CI. Para configurar:
+
+1. Gere o keystore (fora do Git) e guarde bem as senhas:
+   ```powershell
+   keytool -genkeypair -keystore android/release.keystore -alias videogen -keyalg RSA -keysize 2048 -validity 9125
+   ```
+2. Converta para base64 e cadastre os segredos em **Settings → Secrets and variables → Actions** no GitHub:
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("android/release.keystore")) | Set-Clipboard
+   ```
+   Segredos: `ANDROID_KEYSTORE_BASE64` (o texto copiado), `ANDROID_KEY_ALIAS` (`videogen`),
+   `ANDROID_KEYSTORE_PASSWORD` e `ANDROID_KEY_PASSWORD`.
+3. Sem esses segredos o workflow de Release falha — de propósito, para nunca publicar APK sem assinatura válida.
+
+Quem instalou o APK de **debug** (assinatura do PC ou do runner) precisa **desinstalar antes** de instalar
+o de release: o Android não permite atualizar um app para outra assinatura. Daqui em diante, todas as
+Releases usam a mesma assinatura e atualizam normalmente (o cartão de "Nova versão" no app já aponta para elas).
 
 O wrapper (`gradlew`, `gradle/wrapper/*`) está commitado: compile com `./gradlew :app:assembleDebug` (dentro de `android/`). O CI usa o mesmo wrapper, então o build é reproduzível.
 

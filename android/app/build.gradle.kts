@@ -20,15 +20,29 @@ android {
         applicationId = "com.example.videogen"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.3"
+        versionCode = 3
+        versionName = "0.4"
         // 10.0.2.2 = localhost do PC visto pelo emulador.
         buildConfigField("String", "API_BASE_URL", "\"${cfg("videogen.apiBaseUrl", "http://10.0.2.2:3000/")}\"")
         buildConfigField("String", "APP_KEY", "\"${cfg("videogen.appKey", "troque-esta-chave")}\"")
         manifestPlaceholders["usesCleartext"] = "false"
     }
+    // Assinatura de release via keystore próprio (CI: segredos do GitHub; local: ~/.gradle/gradle.properties
+    // com release.storeFile/storePassword/keyAlias/keyPassword — nunca commitar o .keystore).
+    val ksFile = System.getenv("RELEASE_KEYSTORE_FILE") ?: (findProperty("release.storeFile") as String?).orEmpty()
+    signingConfigs {
+        create("release") {
+            if (ksFile.isNotBlank()) {
+                storeFile = file(ksFile)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: findProperty("release.storePassword") as String?
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: findProperty("release.keyAlias") as String?
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: findProperty("release.keyPassword") as String?
+            }
+        }
+    }
     buildTypes {
         debug { manifestPlaceholders["usesCleartext"] = "true" } // http só em debug; release exige HTTPS
+        release { signingConfig = signingConfigs.getByName("release") } // sem minify neste estágio
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
