@@ -32,7 +32,8 @@ jobs:
           bad=""
           for pair in "FCM_PROJECT_ID:$FCM_PROJECT_ID" "FCM_APP_ID:$FCM_APP_ID" "FCM_API_KEY:$FCM_API_KEY"; do
             name="${pair%%:*}"; v="${pair#*:}"
-            case "$v" in ""|*[!-~]*) bad="$bad $name";; esac
+            # vazio ou com qualquer espaço/quebra de linha (tokens são de uma linha só)
+            case "$v" in ""|*[[:space:]]*) bad="$bad $name";; esac
           done
           if [ -z "$FCM_PROJECT_ID$FCM_APP_ID$FCM_API_KEY" ]; then
             echo "FCM não configurado: push desligado neste build."
