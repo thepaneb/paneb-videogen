@@ -1,5 +1,9 @@
 version: 2
 updates:
   - { package-ecosystem: npm, directory: /backend, schedule: { interval: weekly } }
-  - { package-ecosystem: gradle, directory: /android, schedule: { interval: weekly } }
+  - package-ecosystem: gradle
+    directory: /android
+    schedule: { interval: weekly }
+    # okhttp 5.x exige compileSdk 37 (hoje 34 + AGP 8.5); reavaliar junto com o upgrade do SDK.
+    ignore: [{ dependency-name: "com.squareup.okhttp3:okhttp", update-types: ["version-update:semver-major"] }]
   - { package-ecosystem: github-actions, directory: /, schedule: { interval: weekly } }
