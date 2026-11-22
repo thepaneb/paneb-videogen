@@ -20,8 +20,8 @@ android {
         applicationId = "com.example.videogen"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "0.9"
+        versionCode = 11
+        versionName = "0.10"
         // 10.0.2.2 = localhost do PC visto pelo emulador.
         buildConfigField("String", "API_BASE_URL", "\"${cfg("videogen.apiBaseUrl", "http://10.0.2.2:3000/")}\"")
         buildConfigField("String", "APP_KEY", "\"${cfg("videogen.appKey", "troque-esta-chave")}\"")
