@@ -1,5 +1,71 @@
 # Implantação (HTTPS, Docker, backups)
 
+## Em uso agora — túnel compartilhado (ngrok + Caddy local)
+
+> Estado verificado em **2026-11-22**. Este é o deploy real em operação nesta máquina; as opções A/B abaixo são
+> alternativas (VPS com domínio próprio ou VPN) e **não** estão em uso aqui.
+
+Um único túnel ngrok (plano free = 1 túnel) atende **duas aplicações**: o Caddy divide o tráfego por prefixo de path.
+
+```
+celular ──HTTPS──► ngrok (graceful-fragrance-extrovert.ngrok-free.dev)
+                        │
+                        ▼ :8090 (só loopback)
+                   ┌── Caddy (Caddyfile.tunel) ──┐
+                   │ /videogen/* → :3100         │  (strip do prefixo; a API continua vendo /jobs, /capabilities, /files…)
+                   │ resto       → :3000         │  (live-persona, repasse transparente, outro repositório)
+                   └─────────────────────────────┘
+```
+
+| Peça | O quê | Porta/arquivo | Estado em 2026-11-22 |
+|---|---|---|---|
+| Backend VideoGen | `node --import tsx src/server.ts` (pasta `backend/`) | `:3100` (override `PORT=3100`; o `.env` mantém `PORT=3000`) | no ar (`/healthz` 200; default `comfyui`) |
+| Caddy | `D:\tools\caddy.exe run --config Caddyfile.tunel` | `:8090` + admin `:2019` | no ar |
+| ngrok | `ngrok http 8090 --url=graceful-fragrance-extrovert.ngrok-free.dev` | URL fixa em `tunnel-api.url.txt` | no ar |
+| live-persona | outro app/repositório | `:3000` | no ar |
+| ComfyUI local | `COMFY_URL=http://127.0.0.1:8188` | `:8188` | no ar |
+| Vigia | tarefa agendada **"VideoGen Tunnel Watch"** (a cada 5 min): `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\watch-tunnel.ps1` | log `tunnel-watch.log`; contadores em `%TEMP%\videogen-tunnel-*.fail` | ativa (último run OK) |
+| Túnel apk (cloudflared quick) | origem `http://localhost:8080` → URL em `tunnel-apk.url.txt` | `cloudflared-apk.log/.err` | **origem fora do ar** (nada escuta `:8080`); o vigia só alerta — túnel não é o problema |
+
+### Como o vigia age (`scripts/watch-tunnel.ps1`)
+
+- **api (ngrok, domínio fixo):** testa a URL pública (`<url>/healthz` precisa conter `"ok":true` — o ngrok free devolve página de aviso para navegadores, por isso o teste usa UA próprio e confere o corpo). Se falhar 2× seguidas: backend `:3100` fora do ar → **só alerta**; proxy `:8090/videogen` fora mas backend ok → **reinicia o Caddy**; proxy ok mas túnel morto → **reinicia o ngrok com o mesmo `--url`** (a URL pública não muda).
+- **apk (cloudflared):** origem `:8080` fora do ar → só alerta. Origem ok mas pública falha 2× → mata o `cloudflared` e sobe outro quick tunnel, gravando a **nova URL** em `tunnel-apk.url.txt` (+ toast no Windows).
+- Falhas de toast/log não quebram o ciclo (`try/catch` interno); o `LastTaskResult` da tarefa fica `0`.
+
+### Subir/derrubar cada peça
+
+```powershell
+# Backend VideoGen na porta do Caddy (sem tocar no .env; o dotenv não sobrescreve o ambiente)
+$env:PORT="3100"
+Start-Process node -ArgumentList "--import","tsx","src/server.ts" `
+  -WorkingDirectory "$PWD\backend" -WindowStyle Hidden `
+  -RedirectStandardOutput "$PWD\backend\server-3100.log" -RedirectStandardError "$PWD\backend\server-3100.err"
+curl.exe -s http://127.0.0.1:3100/healthz   # {"ok":true}
+
+# Caddy (proxy :8090)
+D:\tools\caddy.exe run --config Caddyfile.tunel
+# Checar config carregada: curl.exe -s http://127.0.0.1:2019/config/
+
+# ngrok (mesmo domínio fixo — não trocar o --url, o app usa a URL de tunnel-api.url.txt)
+ngrok http 8090 --url=graceful-fragrance-extrovert.ngrok-free.dev
+# No app (local.properties ou Ajustes): videogen.apiBaseUrl=https://graceful-fragrance-extrovert.ngrok-free.dev/videogen/
+```
+
+> O backend sobe **manual** (sem serviço do Windows nem tarefa agendada): se a máquina reiniciar, siga a sequência
+> acima (backend → confere `:3100` → Caddy e ngrok só se caíram; o vigia recria o resto sozinho). `Ctrl+C`/SIGTERM no
+> `node` encerra limpo (espera a rodada do worker, fecha o SQLite).
+
+### Checagem ponta a ponta
+
+```powershell
+curl.exe -s http://127.0.0.1:3100/healthz                                        # backend direto
+curl.exe -s http://127.0.0.1:8090/videogen/healthz                              # via Caddy (strip /videogen)
+curl.exe -s https://graceful-fragrance-extrovert.ngrok-free.dev/videogen/healthz # via túnel (celular usa esta)
+```
+
+### Produção (não usada aqui)
+
 > Os arquivos `Dockerfile`, `docker-compose.yml` e `Caddyfile` foram escritos mas **não foram executados** no ambiente
 > de desenvolvimento deste projeto (sem Docker disponível). O CI faz `docker build`; o primeiro `compose up` pode pedir ajustes.
 

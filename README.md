@@ -20,7 +20,7 @@ cp .env.example .env        # defina APP_KEY; PROVIDER=mock já vem como padrão
 npm run dev                 # requer Node >= 22.13
 ```
 
-Para implantar com HTTPS: [docs/deployment.md](docs/deployment.md) (Docker Compose + Caddy).
+Para expor o backend (túnel compartilhado em uso; Docker Compose como alternativa): [docs/deployment.md](docs/deployment.md).
 
 Teste: `curl -H "X-App-Key: <sua chave>" -F prompt="gato astronauta" localhost:3000/jobs` e acompanhe em
 `/jobs/<id>` (o mock termina em ~15 s). Depois, abra a pasta `android/` no Android Studio
