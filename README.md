@@ -64,4 +64,4 @@ Veja o [roadmap](docs/roadmap.md).
 
 ## Licença
 
-Defina a licença antes de publicar (adicione um arquivo `LICENSE`).
+MIT — veja o arquivo [LICENSE](LICENSE).
