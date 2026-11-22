@@ -8,7 +8,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 
 // Ambiente de teste: mock (sem custo/rede), banco temporário, enhance e métricas ligados.
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "videogen-api-"));
-Object.assign(process.env, { APP_KEY: "k", PROVIDER: "mock", DAILY_LIMIT: "8", METRICS_TOKEN: "tok", ANTHROPIC_API_KEY: "sk-test",
+Object.assign(process.env, { APP_KEY: "k", PROVIDER: "mock", DAILY_LIMIT: "9", METRICS_TOKEN: "tok", ANTHROPIC_API_KEY: "sk-test",
   PROMPT_MODEL: "modelo-teste", LOG_LEVEL: "error" });
 
 const spec: any = parse(fs.readFileSync("openapi.yaml", "utf8"));
@@ -86,12 +86,12 @@ test("contrato: criar com imagem e seed, idempotência, listar e obter", async (
   const fd = () => { const f = new FormData(); f.append("prompt", "gato astronauta"); f.append("seed", "1234"); f.append("duration", "5");
     // PNG mínimo válido (assinatura de 8 bytes; o resto do conteúdo não é validado)
     f.append("image", new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], { type: "image/png" }), "a.png");
-    f.append("promptEnhance", "false"); f.append("cfg", "3"); f.append("imgStrength", "0.5"); f.append("steps", "low"); return f; };
+    f.append("promptEnhance", "false"); f.append("cfg", "3"); f.append("imgStrength", "0.5"); f.append("steps", "low"); f.append("camera", "Pan Left"); return f; };
   const a = await call("POST", "/jobs", { headers: { "Idempotency-Key": "idem-1" }, body: fd() });
   assert.equal(a.status, 201); jobId = a.body.id;
   assert.equal(a.body.params.seed, 1234); assert.equal(a.body.params.hasImage, true);
-  assert.deepEqual([a.body.params.promptEnhance, a.body.params.cfg, a.body.params.imgStrength, a.body.params.steps],
-    [false, 3, 0.5, "low"]);
+  assert.deepEqual([a.body.params.promptEnhance, a.body.params.cfg, a.body.params.imgStrength, a.body.params.steps, a.body.params.camera],
+    [false, 3, 0.5, "low", "Pan Left"]);
   assert.equal(a.body.params.imageFile, undefined, "nomes internos não vazam");
   assert.equal(a.body.progress, 0, "job novo começa com progresso 0");
   assert.ok(typeof a.body.etaSec === "number" && a.body.etaSec >= 0, "job novo traz previsão em segundos");
@@ -117,13 +117,22 @@ test("contrato: repetir/variar (seed nova, mesma seed, imagem reaproveitada, cot
   assert.deepEqual([adj.body.items[0].params.durationSec, adj.body.items[0].params.aspect, adj.body.items[0].params.quality],
     [10, "1:1", "pro"]);
   assert.equal((await rep({ count: 1, duration: 7 })).status, 400); // fora dos durations do provedor
-  const tune = await rep({ count: 1, promptEnhance: true, cfg: 2.5, imgStrength: 0.9, steps: "high" });
+  const tune = await rep({ count: 1, promptEnhance: true, cfg: 2.5, imgStrength: 0.9, steps: "high", camera: "Zoom Out" });
   assert.equal(tune.status, 201);
-  assert.deepEqual([tune.body.items[0].params.promptEnhance, tune.body.items[0].params.cfg, tune.body.items[0].params.imgStrength, tune.body.items[0].params.steps],
-    [true, 2.5, 0.9, "high"]);
+  assert.deepEqual([tune.body.items[0].params.promptEnhance, tune.body.items[0].params.cfg, tune.body.items[0].params.imgStrength, tune.body.items[0].params.steps, tune.body.items[0].params.camera],
+    [true, 2.5, 0.9, "high", "Zoom Out"]);
   assert.equal((await rep({ count: 1, cfg: 99 })).status, 400);
   assert.equal((await rep({ count: 1, imgStrength: 2 })).status, 400);
   assert.equal((await rep({ count: 1, steps: "turbo" })).status, 400);
+  const sameProv = await rep({ count: 1, provider: "mock" });
+  assert.equal(sameProv.status, 201);
+  assert.ok(sameProv.body.items.every((j: any) => j.provider === "mock"));
+  assert.equal((await rep({ count: 1, provider: "nope" })).status, 400); // provedor desconhecido
+  // job com imagem repetido num provedor só-texto: registra o wan13 (só precisa do arquivo existir)
+  fs.writeFileSync(path.join(process.env.DATA_DIR!, "wan13.api.json"), JSON.stringify({ "58": { class_type: "SaveVideo", inputs: { video: ["57", 0], filename_prefix: "{{prefix}}", format: "auto", codec: "auto" } } }));
+  process.env.COMFY_WORKFLOW_WAN13 = path.join(process.env.DATA_DIR!, "wan13.api.json");
+  assert.equal((await rep({ count: 1, provider: "comfyui-wan13" })).status, 400);
+  delete process.env.COMFY_WORKFLOW_WAN13;
   assert.equal((await call("GET", "/jobs?limit=abc", {}, "/jobs")).status, 400);
   assert.equal((await call("GET", "/jobs?limit=0", {}, "/jobs")).status, 400);
   const noDur = new FormData(); noDur.append("prompt", "gato"); noDur.append("duration", "0");
@@ -140,14 +149,14 @@ test("contrato: repetir/variar (seed nova, mesma seed, imagem reaproveitada, cot
   process.env.KLING_ACCESS_KEY = "ak-teste"; process.env.KLING_SECRET_KEY = "segredo-com-mais-de-16";
   const kdb: any = await import("../src/db.js");
   const now = Date.now();
-  kdb.insertJob({ id: "kj1", userId: "default", provider: "kling", providerJobId: "x", status: "queued", attempts: 0,
+  kdb.insertJob({ id: "kj1", userId: "default", provider: "kling", providerJobId: "x", status: "queued", locked: false, attempts: 0,
     createdAt: now, updatedAt: now, params: { prompt: "x", durationSec: 5, aspect: "9:16", quality: "std", hasImage: false, hasLastImage: false } });
   assert.equal((await call("POST", "/jobs/kj1/cancel", {}, "/jobs/{id}/cancel")).status, 409);
   kdb.deleteJob("kj1");
   const i1 = await rep({ count: 2 }, { "Idempotency-Key": "r1" }), i2 = await rep({ count: 2 }, { "Idempotency-Key": "r1" });
   assert.deepEqual(i2.body.items.map((j: any) => j.id), i1.body.items.map((j: any) => j.id)); // sem duplicar
   assert.equal((await rep({ count: 99 })).status, 400);
-  assert.equal((await rep({ count: 4 })).status, 429); // já há 8 jobs; DAILY_LIMIT=8
+  assert.equal((await rep({ count: 4 })).status, 429); // já há 9 jobs; DAILY_LIMIT=9
 });
 
 test("contrato: sucesso com vídeo assinado, cancelar e excluir", async () => {
@@ -158,6 +167,10 @@ test("contrato: sucesso com vídeo assinado, cancelar e excluir", async () => {
   assert.equal((await call("GET", "/files/x.mp4", { headers: {} }, "/files/{name}")).status, 403);
   const other = (await call("GET", "/jobs?limit=50")).body.items.find((x: any) => x.id !== jobId && x.status === "queued");
   assert.equal((await call("POST", `/jobs/${other.id}/cancel`, {}, "/jobs/{id}/cancel")).body.status, "canceled");
+  assert.equal((await call("POST", `/jobs/${jobId}/lock`, {}, "/jobs/{id}/lock")).body.locked, true);
+  assert.equal((await call("DELETE", `/jobs/${jobId}`, {}, "/jobs/{id}")).status, 409); // protegido
+  assert.equal((await call("POST", `/jobs/${jobId}/unlock`, {}, "/jobs/{id}/unlock")).body.locked, false);
+  assert.equal((await call("POST", "/jobs/nao-existe/lock", {}, "/jobs/{id}/lock")).status, 404);
   assert.equal((await call("DELETE", `/jobs/${other.id}`, {}, "/jobs/{id}")).status, 204);
 });
 

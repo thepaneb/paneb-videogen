@@ -5,7 +5,7 @@ import path from "node:path";
 import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { loadUsers, userFor } from "./auth.js";
 import { signFile, verifyFile } from "./signing.js";
-import { addPushToken, countActive, countSince, deleteJobFor, FILES_DIR, getByIdem, getJob, getJobFor, insertJob, listJobs, medianSucceededMs, removePushToken, updateJob } from "./db.js";
+import { addPushToken, countActive, countSince, deleteJobFor, FILES_DIR, getByIdem, getJob, getJobFor, insertJob, listJobs, medianSucceededMs, removePushToken, setJobLock, updateJob } from "./db.js";
 import { hasImageMagic, loadInput, removeInputs, saveInput } from "./inputs.js";
 import { enhanceConfig, enhancePrompt } from "./enhance.js";
 import { pushAvailable } from "./push.js";
@@ -19,7 +19,7 @@ const safeEq = (a: string, b: string) => timingSafeEqual(sha(a), sha(b));
 const randomSeed = () => randomInt(0, 2 ** 31 - 1);
 // Corrida de idempotência: dois POSTs simultâneos passam do getByIdem e um deles viola o UNIQUE.
 const isConstraint = (e: any) => /unique constraint|SQLITE_CONSTRAINT/i.test(String(e?.message ?? e ?? ""));
-type Tune = { promptEnhance: boolean; cfg: number; imgStrength: number; steps: "low" | "std" | "high" };
+type Tune = { promptEnhance: boolean; cfg: number; imgStrength: number; steps: "low" | "std" | "high"; camera?: string };
 // Ajustes finos do workflow (ComfyUI; outros provedores ignoram). Devolve os valores ou a mensagem de erro.
 function parseTune(b: any): Tune | string {
   const promptEnhance = b?.promptEnhance === true || b?.promptEnhance === "true";
@@ -29,7 +29,9 @@ function parseTune(b: any): Tune | string {
   if (!Number.isFinite(imgStrength) || imgStrength < 0 || imgStrength > 1) return "imgStrength inválido (0 a 1)";
   const steps = (b?.steps === undefined || b?.steps === "" ? "std" : String(b.steps)) as "low" | "std" | "high";
   if (!["low", "std", "high"].includes(steps)) return "steps inválido (low|std|high)";
-  return { promptEnhance, cfg, imgStrength, steps };
+  const camera = b?.camera === undefined || b?.camera === "" ? undefined : String(b.camera);
+  if (camera !== undefined && camera.length > 40) return "camera inválida (texto até 40 caracteres)";
+  return { promptEnhance, cfg, imgStrength, steps, camera };
 }
 // Chute inicial (ms) para a previsão até o provedor ter histórico de jobs concluídos.
 const FALLBACK_MS: Record<string, number> = { mock: 15_000, comfyui: 720_000, kling: 300_000 };
@@ -112,7 +114,7 @@ export function createApp() {
   const dto = (j: Job) => {
     const { imageFile: _a, lastImageFile: _b, ...params } = j.params; // nomes internos não vão para o cliente
     return {
-      id: j.id, provider: j.provider, status: j.status, prompt: j.params.prompt, params,
+      id: j.id, provider: j.provider, status: j.status, locked: j.locked, prompt: j.params.prompt, params,
       output: j.output && { ...j.output, url: j.output.url.startsWith("/files/")
         ? signFile(path.basename(j.output.url), FILES_SECRET, FILES_TTL_MS) : j.output.url },
       error: j.error, createdAt: j.createdAt, updatedAt: j.updatedAt,
@@ -146,12 +148,12 @@ export function createApp() {
     catch (e) { m.providerErrors.inc({ provider: prov.caps.name, op: "submit" }); throw e; }
     const params: StoredParams = {
       prompt: p.prompt, negativePrompt: p.negativePrompt, durationSec: p.durationSec, aspect: p.aspect, quality: p.quality, seed: p.seed,
-      promptEnhance: p.promptEnhance, cfg: p.cfg, imgStrength: p.imgStrength, steps: p.steps,
+      promptEnhance: p.promptEnhance, cfg: p.cfg, imgStrength: p.imgStrength, steps: p.steps, camera: p.camera,
       hasImage: !!p.image, hasLastImage: !!p.lastImage,
       imageFile: p.image && saveInput(id, "first", p.image), lastImageFile: p.lastImage && saveInput(id, "last", p.lastImage),
     };
     const now = Date.now();
-    const job: Job = { id, userId: user, provider: prov.caps.name, providerJobId, status: "queued", params, attempts: 0, idemKey, createdAt: now, updatedAt: now };
+    const job: Job = { id, userId: user, provider: prov.caps.name, providerJobId, status: "queued", locked: false, params, attempts: 0, idemKey, createdAt: now, updatedAt: now };
     try {
       insertJob(job);
     } catch (e) {
@@ -232,8 +234,9 @@ export function createApp() {
     if (!src) return fail(res, 404, "não encontrado");
     const count = req.body?.count === undefined ? 1 : Number(req.body.count);
     if (!Number.isInteger(count) || count < 1 || count > MAX_VARIATIONS) return fail(res, 400, `count deve ser de 1 a ${MAX_VARIATIONS}`);
-    const prov = registry()[src.provider];
-    if (!prov) return fail(res, 400, `provedor ${src.provider} indisponível`);
+    // Com `provider` troca o executor (rascunho→final); durações/proporções/qualidades valem do novo provedor.
+    const prov = req.body?.provider === undefined ? registry()[src.provider] : registry()[String(req.body.provider)];
+    if (!prov) return fail(res, 400, `provedor ${req.body?.provider ?? src.provider} indisponível`);
     const prompt = req.body?.prompt === undefined ? src.params.prompt : String(req.body.prompt).trim();
     if (!prompt || prompt.length > 5000) return fail(res, 400, "prompt inválido");
     // Ajustes opcionais (o app usa em "ajustar e refazer"); o resto vem do job original.
@@ -250,10 +253,13 @@ export function createApp() {
       cfg: req.body?.cfg ?? srcTune.cfg,
       imgStrength: req.body?.imgStrength ?? srcTune.imgStrength,
       steps: req.body?.steps ?? srcTune.steps,
+      camera: req.body?.camera ?? srcTune.camera,
     });
     if (typeof tune === "string") return fail(res, 400, tune);
     const image = loadInput(src.params.imageFile), lastImage = loadInput(src.params.lastImageFile);
     if ((src.params.hasImage && !image) || (src.params.hasLastImage && !lastImage)) return fail(res, 409, "imagem de origem não está mais disponível");
+    if (image && !prov.caps.features.image) return fail(res, 400, `este provedor (${prov.caps.name}) não aceita imagem inicial`);
+    if (lastImage && !prov.caps.features.lastImage) return fail(res, 400, `este provedor (${prov.caps.name}) não aceita imagem final`);
     const idemBase = req.header("Idempotency-Key") || undefined;
     // Retentativa idempotente não gasta cota: só contam os itens que ainda não existem.
     const already = idemBase ? Array.from({ length: count }, (_, i) => getByIdem(me(res), `${idemBase}#${i}`)).filter(Boolean).length : 0;
@@ -310,9 +316,23 @@ export function createApp() {
     res.json(dto(getJob(j.id)!));
   });
 
+  /** Trava contra exclusão manual e limpeza automática (o vídeo e as imagens ficam preservados). */
+  app.post("/jobs/:id/lock", async (req, res) => {
+    const j = owned(res, req.params.id);
+    if (!j) return fail(res, 404, "não encontrado");
+    res.json(dto(setJobLock(me(res), j.id, true)!));
+  });
+
+  app.post("/jobs/:id/unlock", async (req, res) => {
+    const j = owned(res, req.params.id);
+    if (!j) return fail(res, 404, "não encontrado");
+    res.json(dto(setJobLock(me(res), j.id, false)!));
+  });
+
   app.delete("/jobs/:id", async (req, res) => {
     const j = owned(res, req.params.id);
     if (!j) return fail(res, 404, "não encontrado");
+    if (j.locked) return fail(res, 409, "job protegido (desbloqueie para excluir)");
     if (!TERMINAL.has(j.status)) {
       try { await registry()[j.provider]?.cancel?.(j.providerJobId); }
       catch (e: any) { log.warn("falha ao cancelar no provedor", { job: j.id, error: e.message }); }

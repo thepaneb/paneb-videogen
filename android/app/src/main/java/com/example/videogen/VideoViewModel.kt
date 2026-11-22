@@ -61,6 +61,7 @@ class VideoViewModel(app: Application) : AndroidViewModel(app) {
     var cfg by mutableStateOf(1f)
     var imgStrength by mutableStateOf(0.7f)
     var steps by mutableStateOf("std")
+    var camera by mutableStateOf("Zoom In")
     var message by mutableStateOf("")
     var sending by mutableStateOf(false)
     var enhancing by mutableStateOf(false)
@@ -133,16 +134,19 @@ class VideoViewModel(app: Application) : AndroidViewModel(app) {
         val tCfg = if ("cfg" in tune) cfg.toDouble() else null
         val tImg = if ("imgStrength" in tune) imgStrength.toDouble() else null
         val tSteps = if ("steps" in tune) steps else null
+        val tCamera = if ("camera" in tune) camera else null
         viewModelScope.launch {
             sending = true; message = "Enviando…"
             try {
                 val src = adjustSource
                 if (src != null && imageUri == null && lastUri == null) {
                     // Sem imagem nova: reaproveita a guardada no servidor, com os ajustes.
+                    // Provedor diferente do original = rascunho→final (o servidor valida compatibilidade).
                     api.repeat(src.id, RepeatBody(count = 1, prompt = prompt.trim(),
+                        provider = provider.takeIf { it != src.provider },
                         duration = duration, aspect = aspect, quality = quality,
                         negativePrompt = negative.trim().ifEmpty { null },
-                        promptEnhance = tPromptEnhance, cfg = tCfg, imgStrength = tImg, steps = tSteps))
+                        promptEnhance = tPromptEnhance, cfg = tCfg, imgStrength = tImg, steps = tSteps, camera = tCamera))
                 } else {
                     api.create(
                         idemKey, text(provider), text(prompt.trim()),
@@ -150,7 +154,7 @@ class VideoViewModel(app: Application) : AndroidViewModel(app) {
                         text(duration.toString()), text(aspect), text(quality),
                         part("image", imageUri), part("lastImage", lastUri),
                         tPromptEnhance?.let { text(it.toString()) }, tCfg?.let { text(it.toString()) },
-                        tImg?.let { text(it.toString()) }, tSteps?.let { text(it) },
+                        tImg?.let { text(it.toString()) }, tSteps?.let { text(it) }, tCamera?.let { text(it) },
                     )
                     idemKey = UUID.randomUUID().toString()
                 }
@@ -170,7 +174,7 @@ class VideoViewModel(app: Application) : AndroidViewModel(app) {
         if (p != null) {
             duration = p.durationSec; aspect = p.aspect; quality = p.quality
             promptEnhance = p.promptEnhance; cfg = (p.cfg ?: 1.0).toFloat(); imgStrength = (p.imgStrength ?: 0.7).toFloat()
-            steps = p.steps ?: "std"
+            steps = p.steps ?: "std"; camera = p.camera ?: "Zoom In"
         }
         imageUri = null; lastUri = null // a imagem original é reusada no servidor, salvo se trocar
         adjustSource = j; tab = 0; message = "Ajustando a partir do histórico — a imagem original é mantida, salvo troca."
@@ -199,6 +203,11 @@ class VideoViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun delete(id: String) = viewModelScope.launch {
         try { api.delete(id); refresh() } catch (e: Exception) { message = "Falha ao excluir: ${e.message}" }
+    }
+
+    fun toggleLock(j: JobDto) = viewModelScope.launch {
+        try { if (j.locked) api.unlock(j.id) else api.lock(j.id); refresh() }
+        catch (e: Exception) { message = "Falha ao ${if (j.locked) "desbloquear" else "proteger"}: ${e.message}" }
     }
 
     private fun safeName(id: String) = id.replace(Regex("[^A-Za-z0-9_-]"), "").take(64).ifEmpty { "video" }

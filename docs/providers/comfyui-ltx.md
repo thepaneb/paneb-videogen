@@ -40,6 +40,20 @@ template oficial do ComfyUI) e aponte `COMFY_URL` para ela.
 
 ## 3. Modelos (instalação manual)
 
+> **Nota (2026-11-21):** o provedor usa dois workflows 2.3 (2 estágios):
+> `ltx2-t2v.api.json` (texto→vídeo, validado: 3 s em 640×352 `low` numa 3060 12 GB
+> em **~7 min**) e `ltx2-i2v.api.json` (imagem→vídeo, validado: job de ~23 min
+> numa 3060 12 GB). Arquivos usados, todos íntegros no Comfy (`checkpoints/`,
+> `latent_upscale_models/`, `text_encoders/`, `loras/` — checkpoint de 29.145.431.166
+> bytes, igual ao oficial `Lightricks/LTX-2.3-fp8`):
+> `ltx-2.3-22b-dev-fp8.safetensors`,
+> `ltx-2.3-spatial-upscaler-x2-1.1.safetensors`,
+> `gemma_3_12B_it_fp4_mixed.safetensors`,
+> `ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors` e
+> `gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors`.
+> O T2V usa prompt cru (sem `promptEnhance` de imagem). Para texto→vídeo rápido,
+> prefira `comfyui-wan13` (~3 min).
+
 Do repositório [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5):
 
 | Arquivo | Pasta em `ComfyUI/models/` |
@@ -96,8 +110,8 @@ Dica de VRAM: `python main.py --reserve-vram 5` (valor em GB) deixa folga para o
 ```ini
 PROVIDER=comfyui
 COMFY_URL=http://127.0.0.1:8188
-COMFY_WORKFLOW=workflows/ltx2.api.json         # texto→vídeo (e imagem→vídeo, se for o único)
-COMFY_WORKFLOW_I2V=workflows/ltx2-i2v.api.json # opcional: usado quando o pedido traz imagem
+COMFY_WORKFLOW=workflows/ltx2-t2v.api.json     # texto→vídeo (derivado do I2V validado; sem enhance de imagem)
+COMFY_WORKFLOW_I2V=workflows/ltx2-i2v.api.json # imagem→vídeo: usado quando o pedido traz imagem
 COMFY_FPS=24
 COMFY_DURATIONS=5,10                           # em GPU pequena, ex.: 3,5
 ```

@@ -8,12 +8,12 @@ e Veo (este último só como referência de projeto; **não implementado**). Ver
 - **Status:** `queued | running | succeeded | failed | canceled` (terminais: os três últimos).
 - **GenParams:** `prompt`, `negativePrompt?`, `durationSec`, `aspect` (`9:16|1:1|16:9`), `quality` (`low|std|pro`),
   `seed?` (só provedores com `features.seed`), `image?` (primeiro quadro), `lastImage?` (último quadro). Ajustes do
-  ComfyUI: `promptEnhance?` (bool), `cfg?` (0–10), `imgStrength?` (0–1), `steps?` (`low|std|high`). As imagens são guardadas em
+  ComfyUI: `promptEnhance?` (bool), `cfg?` (0–10), `imgStrength?` (0–1), `steps?` (`low|std|high`), `camera?` (texto, ex. `Zoom In`; só provedores com `tune` `camera`). As imagens são guardadas em
   `data/inputs/<jobId>-first|last.<ext>` (nomes internos em `imageFile/lastImageFile`, **não** expostos pela API) para permitir
   repetir/variar o job; são apagadas junto com o job.
-- **Job:** `id`, `provider`, `providerJobId`, `status`, `params`, `output?`, `error?`, `attempts`, `idemKey?`, datas (ms).
+- **Job:** `id`, `provider`, `providerJobId`, `status`, `locked` (protegido contra exclusão e limpeza), `params`, `output?`, `error?`, `attempts`, `idemKey?`, datas (ms).
 - **Output:** `url` (`/files/<id>.mp4` ou URL remota de fallback), `durationSec?`, `mime`.
-- **Capabilities** (por provedor): `durations[]`, `aspects[]`, `qualities[]`, `features{image,lastImage,negativePrompt,cancel,seed,tune[]}` (`tune` lista ajustes finos suportados, ex. ComfyUI: `promptEnhance,cfg,imgStrength,steps`).
+- **Capabilities** (por provedor): `durations[]`, `aspects[]`, `qualities[]`, `features{image,lastImage,negativePrompt,cancel,seed,tune[]}` (`tune` lista ajustes finos suportados, ex. ComfyUI: `promptEnhance,cfg,imgStrength,steps`; Fun Camera: `camera`).
 
 ## Mapeamento entre provedores
 
@@ -43,6 +43,7 @@ CREATE TABLE jobs (
   status TEXT NOT NULL, params TEXT NOT NULL,      -- JSON (StoredParams)
   output TEXT, error TEXT,                          -- JSON (Output); output.url guardado SEM assinatura
   attempts INTEGER NOT NULL DEFAULT 0,              -- erros transitórios seguidos
+  locked INTEGER NOT NULL DEFAULT 0,                -- v4: trava contra exclusão e limpeza
   idem_key TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
   UNIQUE (user_id, idem_key)                        -- idempotência é por usuário
 );

@@ -41,6 +41,8 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       created_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, token)
     );` },
+  { version: 4, sql: `
+    ALTER TABLE jobs ADD COLUMN locked INTEGER NOT NULL DEFAULT 0;` },
 ];
 
 function migrate() {
@@ -57,15 +59,17 @@ migrate();
 
 const toJob = (r: any): Job => ({
   id: r.id, userId: r.user_id, provider: r.provider, providerJobId: r.provider_job_id, status: r.status,
+  locked: (r.locked ?? 0) === 1,
   params: JSON.parse(r.params), output: r.output ? JSON.parse(r.output) : undefined,
   error: r.error ?? undefined, attempts: r.attempts, idemKey: r.idem_key ?? undefined,
   createdAt: r.created_at, updatedAt: r.updated_at,
 });
 
 export function insertJob(j: Job) {
-  db.prepare(`INSERT INTO jobs (id,user_id,provider,provider_job_id,status,params,attempts,idem_key,created_at,updated_at)
-              VALUES (?,?,?,?,?,?,?,?,?,?)`)
-    .run(j.id, j.userId, j.provider, j.providerJobId, j.status, JSON.stringify(j.params), 0, j.idemKey ?? null, j.createdAt, j.updatedAt);
+  db.prepare(`INSERT INTO jobs (id,user_id,provider,provider_job_id,status,locked,params,output,error,attempts,idem_key,created_at,updated_at)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(j.id, j.userId, j.provider, j.providerJobId, j.status, j.locked ? 1 : 0, JSON.stringify(j.params),
+      j.output ? JSON.stringify(j.output) : null, j.error ?? null, 0, j.idemKey ?? null, j.createdAt, j.updatedAt);
 }
 export const getJob = (id: string) => { const r = db.prepare("SELECT * FROM jobs WHERE id=?").get(id); return r ? toJob(r) : undefined; };
 export const getJobFor = (userId: string, id: string) => {
@@ -78,6 +82,14 @@ export const listJobs = (userId: string, limit: number, before: number) =>
   db.prepare("SELECT * FROM jobs WHERE user_id=? AND created_at<? ORDER BY created_at DESC, id DESC LIMIT ?").all(userId, before, limit).map(toJob);
 export const listActive = () =>
   db.prepare("SELECT * FROM jobs WHERE status IN ('queued','running') ORDER BY created_at").all().map(toJob);
+/** Terminais (succeeded/failed/canceled) atualizados antes do corte e NÃO protegidos: candidatos à limpeza. */
+export const listTerminalBefore = (cutoffMs: number) =>
+  db.prepare("SELECT * FROM jobs WHERE status IN ('succeeded','failed','canceled') AND locked = 0 AND updated_at < ?").all(cutoffMs).map(toJob);
+/** Trava/destrava contra exclusão manual e limpeza automática (devolve o job atualizado). */
+export function setJobLock(userId: string, id: string, locked: boolean) {
+  db.prepare("UPDATE jobs SET locked=?, updated_at=? WHERE id=? AND user_id=?").run(locked ? 1 : 0, Date.now(), id, userId);
+  return getJobFor(userId, id);
+}
 /** Mediana (ms) de conclusão dos jobs de um provedor (mesma duração primeiro); null sem histórico. */
 export function medianSucceededMs(provider: string, durationSec: number): number | null {
   const pick = (where: string, ...args: (string | number)[]) => {

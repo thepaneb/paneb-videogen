@@ -7,7 +7,7 @@ Um arquivo por provedor + `index.ts` (registro). Contrato (`model.ts`):
 - `submit(params, jobId) -> providerJobId`: o id devolvido precisa bastar para `poll` **depois de reiniciar o servidor**.
 - `poll(id) -> {status, remoteUrl?, ...}`: `running` enquanto não termina; terminal só com `succeeded`/`failed` (+ `error` claro).
 - `cancel?(id)` opcional; ComfyUI usa `/queue` + `/interrupt` (atenção: o interrupt afeta o job em execução, não necessariamente o seu).
-- Placeholders de workflow ComfyUI em **API Format** (nunca o JSON do editor): `{{prompt}} {{negative}} {{image}} {{seed}} {{width}} {{height}} {{frames}} {{fps}} {{duration}} {{prefix}}` (+ `{{cfg}} {{imgStrength}} {{sigmas1}} {{sigmas2}} {{promptEnhance}}` no template LTX 2.3). Tipos preservados pelo `fill()`.
+- Placeholders de workflow ComfyUI em **API Format** (nunca o JSON do editor): `{{prompt}} {{negative}} {{image}} {{seed}} {{width}} {{height}} {{frames}} {{fps}} {{duration}} {{prefix}}` (+ `{{cfg}} {{imgStrength}} {{sigmas1}} {{sigmas2}} {{promptEnhance}}` no template LTX 2.3; `{{motion}}` no Fun Camera). Tipos preservados pelo `fill()`.
 
 ## Worker e robustez
 
@@ -41,6 +41,6 @@ Um arquivo por provedor + `index.ts` (registro). Contrato (`model.ts`):
 
 ## Aderência verificada (2026-11-21)
 
-- Conforme: contrato de provedor respeitado (sem persistência/download em provedores); validação completa incl. knobs (`cfg`, `imgStrength`, `steps`, `promptEnhance` com faixas); idempotência; testes herméticos (sem `.env` local).
+- Conforme: contrato de provedor respeitado (sem persistência/download em provedores); validação completa incl. knobs (`cfg`, `imgStrength`, `steps`, `promptEnhance` com faixas; `camera` como texto, validada no provedor); idempotência; testes herméticos (sem `.env` local).
 - Parcial: `mock` guarda estado em memória (não sobrevive a restart — aceito: só desenvolvimento).
 - Assumido: `jsonwebtoken` está nas dependências mas sem uso no código — candidato a remoção futura (ver guia de segurança).

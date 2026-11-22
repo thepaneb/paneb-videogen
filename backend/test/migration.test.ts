@@ -21,4 +21,5 @@ test("migração: banco v1 (sem user_id) vira v2 preservando dados", () => {
   assert.equal(r.job.userId, "default");
   assert.equal(r.job.params.prompt, "antigo");
   assert.equal(r.byIdem, "old1");
+  assert.equal(r.job.locked, false); // migração v4: destravado por padrão
 });

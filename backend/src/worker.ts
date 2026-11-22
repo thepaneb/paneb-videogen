@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { FILES_DIR, listActive, updateJob } from "./db.js";
+import { FILES_DIR, deleteJob, listActive, listTerminalBefore, updateJob } from "./db.js";
+import { removeInputs } from "./inputs.js";
 import { Job, Status } from "./model.js";
 import { log } from "./log.js";
 import * as m from "./metrics.js";
@@ -15,6 +16,34 @@ const TIMEOUT_MS = (() => {
   return v * 60_000;
 })();
 const MAX_ERRORS = 5;
+
+// Limpeza automática: jobs terminais mais velhos que RETENTION_DAYS saem do banco
+// junto com vídeo e imagens de entrada. Ativos (queued/running) nunca são tocados.
+const RETENTION_MS = (() => {
+  const v = Number(process.env.RETENTION_DAYS ?? 30);
+  if (!Number.isFinite(v) || v < 1) throw new Error("RETENTION_DAYS inválido (esperado número >= 1)");
+  return v * 86_400_000;
+})();
+
+/** Remove terminais anteriores ao corte; devolve quantos jobs e arquivos saíram. Exportado para testes. */
+export function purgeOldJobs(now = Date.now()): { jobs: number; files: number } {
+  let jobs = 0, files = 0;
+  for (const j of listTerminalBefore(now - RETENTION_MS)) {
+    try {
+      if (j.output?.url.startsWith("/files/")) {
+        const full = path.join(FILES_DIR, path.basename(j.output.url));
+        if (fs.existsSync(full)) files++;
+        fs.rmSync(full, { force: true });
+      }
+      files += removeInputs(j.params);
+      deleteJob(j.id);
+      jobs++;
+      m.jobsPurged.inc({ status: j.status });
+    } catch (e) { log.warn("falha ao limpar job antigo", { job: j.id, error: (e as Error).message }); }
+  }
+  if (jobs) log.info("limpeza automática", { jobs, files });
+  return { jobs, files };
+}
 
 /** Copia o vídeo para o nosso storage (URLs de provedor expiram). Se falhar, usa a URL remota. */
 const STORE_MAX_BYTES = 500 * 1024 * 1024;
@@ -105,8 +134,10 @@ export function startWorker(everyMs = 4000): () => Promise<void> {
     // tem nenhum await (fila vazia → conclusão síncrona), deixando `current` com uma
     // promise resolvida (truthy) para sempre e travando o worker até o watchdog (180s).
     const p = (async () => {
-      try { for (const j of listActive()) await advance(j); }
-      catch (e) { log.error("falha na rodada do worker", { error: (e as Error).message }); }
+      try {
+        purgeOldJobs(); // barato: consulta indexada; sem terminais velhos não faz nada
+        for (const j of listActive()) await advance(j);
+      } catch (e) { log.error("falha na rodada do worker", { error: (e as Error).message }); }
     })();
     current = p;
     void p.finally(() => { if (current === p) current = null; });

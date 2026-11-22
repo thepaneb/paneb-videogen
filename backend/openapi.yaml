@@ -69,6 +69,7 @@ components:
         cfg: { type: number, minimum: 0, maximum: 10, description: "Aderência ao prompt (só comfyui)" }
         imgStrength: { type: number, minimum: 0, maximum: 1, description: "Força da imagem 0..1 (só comfyui)" }
         steps: { type: string, enum: [low, std, high], description: "Cronograma do sampler (só comfyui)" }
+        camera: { type: string, description: "Movimento de câmera (só provedores com tune camera, ex. comfyui-wanfun)" }
         hasImage: { type: boolean }
         hasLastImage: { type: boolean }
     Output:
@@ -85,6 +86,7 @@ components:
         id: { type: string }
         provider: { type: string }
         status: { $ref: "#/components/schemas/Status" }
+        locked: { type: boolean, description: "Protegido contra exclusão manual e limpeza automática" }
         prompt: { type: string }
         params: { $ref: "#/components/schemas/JobParams" }
         output: { $ref: "#/components/schemas/Output" }
@@ -101,6 +103,7 @@ components:
       type: object
       properties:
         count: { type: integer, minimum: 1, description: "1 até MAX_VARIATIONS (padrão 4)" }
+        provider: { type: string, description: "Troca o executor (rascunho→final); precisa estar habilitado" }
         sameSeed: { type: boolean, description: "true reproduz a seed original (só com features.seed)" }
         prompt: { type: string, description: "Substitui o prompt original" }
         duration: { type: integer, description: "Substitui a duração (precisa estar nos durations do provedor)" }
@@ -111,6 +114,7 @@ components:
         cfg: { type: number, minimum: 0, maximum: 10, description: "Substitui a aderência ao prompt" }
         imgStrength: { type: number, minimum: 0, maximum: 1, description: "Substitui a força da imagem" }
         steps: { type: string, enum: [low, std, high], description: "Substitui o cronograma do sampler" }
+        camera: { type: string, description: "Substitui o movimento de câmera" }
     RepeatResponse:
       type: object
       required: [items]
@@ -214,6 +218,7 @@ paths:
                 cfg: { type: number, minimum: 0, maximum: 10 }
                 imgStrength: { type: number, minimum: 0, maximum: 1 }
                 steps: { type: string, enum: [low, std, high] }
+                camera: { type: string }
                 image: { type: string, format: binary }
                 lastImage: { type: string, format: binary }
       responses:
@@ -238,6 +243,7 @@ paths:
         "204": { description: Removido }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Job protegido contra exclusão, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /jobs/{id}/cancel:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
@@ -248,6 +254,24 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Provedor não suporta cancelamento, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /jobs/{id}/lock:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      summary: Trava o job contra exclusão manual e limpeza automática
+      responses:
+        "200": { description: Job atualizado, content: { application/json: { schema: { $ref: "#/components/schemas/Job" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /jobs/{id}/unlock:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      summary: Destrava o job (volta a permitir exclusão e limpeza)
+      responses:
+        "200": { description: Job atualizado, content: { application/json: { schema: { $ref: "#/components/schemas/Job" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /jobs/{id}/repeat:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }

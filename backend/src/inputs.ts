@@ -19,8 +19,15 @@ export function loadInput(file?: string): Asset | undefined {
   if (!fs.existsSync(p)) return undefined;
   return { buffer: fs.readFileSync(p), mime: MIME[path.extname(file).slice(1)] ?? "application/octet-stream" };
 }
-export function removeInputs(p: StoredParams) {
-  for (const f of [p.imageFile, p.lastImageFile]) if (f) fs.rmSync(path.join(INPUTS_DIR, path.basename(f)), { force: true });
+export function removeInputs(p: StoredParams): number {
+  let n = 0;
+  for (const f of [p.imageFile, p.lastImageFile]) {
+    if (!f) continue;
+    const full = path.join(INPUTS_DIR, path.basename(f));
+    if (fs.existsSync(full)) n++;
+    fs.rmSync(full, { force: true });
+  }
+  return n;
 }
 
 /** Checa os bytes mágicos mínimos (o mimetype do upload vem do cliente e não é confiável). */

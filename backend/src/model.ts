@@ -20,6 +20,7 @@ export interface GenParams {
   cfg?: number;            // aderência ao prompt (padrão: 1)
   imgStrength?: number;    // força da imagem 0..1 (padrão: 0.7)
   steps?: "low" | "std" | "high"; // cronograma do sampler (padrão: std)
+  camera?: string;         // movimento de câmera (só provedores com tune "camera", ex. comfyui-wanfun)
 }
 export type StoredParams = Omit<GenParams, "image" | "lastImage"> & {
   hasImage: boolean; hasLastImage: boolean;
@@ -29,6 +30,7 @@ export type StoredParams = Omit<GenParams, "image" | "lastImage"> & {
 export interface Output { url: string; durationSec?: number; mime: string }
 export interface Job {
   id: string; userId: string; provider: string; providerJobId: string; status: Status;
+  locked: boolean; // protegido contra exclusão manual e limpeza automática
   params: StoredParams; output?: Output; error?: string;
   attempts: number; idemKey?: string; createdAt: number; updatedAt: number;
 }

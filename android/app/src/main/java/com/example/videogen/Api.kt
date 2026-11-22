@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit
 @Serializable data class OutputDto(val url: String, val durationSec: Double? = null)
 @Serializable data class JobDto(
     val id: String, val provider: String = "", val status: String = "queued", val prompt: String = "",
+    val locked: Boolean = false,
     val params: JobParamsDto? = null,
     val output: OutputDto? = null, val error: String? = null, val createdAt: Long = 0,
     val progress: Double? = null, val etaSec: Long? = null,
@@ -34,13 +35,16 @@ import java.util.concurrent.TimeUnit
     val seed: Long? = null, val negativePrompt: String? = null,
     val hasImage: Boolean = false, val hasLastImage: Boolean = false,
     val promptEnhance: Boolean = false, val cfg: Double? = null, val imgStrength: Double? = null, val steps: String? = null,
+    val camera: String? = null,
 )
 @Serializable data class JobsDto(val items: List<JobDto>)
 @Serializable data class RepeatBody(
     val count: Int = 1, val sameSeed: Boolean = false, val prompt: String? = null,
+    val provider: String? = null,
     val duration: Int? = null, val aspect: String? = null, val quality: String? = null,
     val negativePrompt: String? = null, val promptEnhance: Boolean? = null,
     val cfg: Double? = null, val imgStrength: Double? = null, val steps: String? = null,
+    val camera: String? = null,
 )
 @Serializable data class RepeatDto(val items: List<JobDto> = emptyList(), val error: String? = null)
 @Serializable data class EnhanceBody(val prompt: String, val provider: String? = null, val hasImage: Boolean = false)
@@ -65,10 +69,13 @@ interface VideoApi {
         @Part("cfg") cfg: RequestBody? = null,
         @Part("imgStrength") imgStrength: RequestBody? = null,
         @Part("steps") steps: RequestBody? = null,
+        @Part("camera") camera: RequestBody? = null,
     ): JobDto
 
     @GET("jobs") suspend fun list(@Query("limit") limit: Int = 30): JobsDto
     @POST("jobs/{id}/cancel") suspend fun cancel(@Path("id") id: String): JobDto
+    @POST("jobs/{id}/lock") suspend fun lock(@Path("id") id: String): JobDto
+    @POST("jobs/{id}/unlock") suspend fun unlock(@Path("id") id: String): JobDto
     @POST("jobs/{id}/repeat") suspend fun repeat(@Path("id") id: String, @Body body: RepeatBody): RepeatDto
     @POST("prompt/enhance") suspend fun enhance(@Body body: EnhanceBody): EnhanceDto
     @POST("push/tokens") suspend fun pushToken(@Body body: PushTokenBody): retrofit2.Response<Unit>

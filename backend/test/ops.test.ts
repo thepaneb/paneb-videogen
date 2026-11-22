@@ -68,7 +68,7 @@ test("worker: rodada vazia não trava as seguintes", async () => {
     await new Promise((r) => setTimeout(r, 300)); // rodadas vazias primeiro
     const now = Date.now();
     insertJob({ id: "wk1", userId: "default", provider: "mock", providerJobId: "inexistente",
-      status: "queued", attempts: 0, createdAt: now, updatedAt: now,
+      status: "queued", locked: false, attempts: 0, createdAt: now, updatedAt: now,
       params: { prompt: "x", durationSec: 5, aspect: "9:16", quality: "std", hasImage: false, hasLastImage: false } });
     let st = "queued";
     const deadline = Date.now() + 8000;
@@ -80,4 +80,29 @@ test("worker: rodada vazia não trava as seguintes", async () => {
     // mock sem estado em memória falha rápido ("job desconhecido"); o ponto é que a rodada rodou.
     assert.equal(st, "failed");
   } finally { await stop(); }
+});
+
+test("worker: limpeza remove terminais velhos com arquivos e preserva o resto", async () => {
+  const db = await import("../src/db.js");
+  const { purgeOldJobs } = await import("../src/worker.js");
+  const { INPUTS_DIR } = await import("../src/inputs.js");
+  const old = Date.now() - 40 * 86_400_000, now = Date.now();
+  const base = { userId: "default", provider: "mock", providerJobId: "x", attempts: 0,
+    params: { prompt: "x", durationSec: 5, aspect: "9:16", quality: "std", hasImage: true, hasLastImage: false, imageFile: "old-first.png" } };
+  fs.writeFileSync(path.join(db.FILES_DIR, "old.mp4"), "video");
+  fs.writeFileSync(path.join(INPUTS_DIR, "old-first.png"), "img");
+  db.insertJob({ ...base, id: "old-ok", status: "succeeded", createdAt: old, updatedAt: old,
+    output: { url: "/files/old.mp4", mime: "video/mp4" } } as any);
+  db.insertJob({ ...base, id: "old-run", status: "running", createdAt: old, updatedAt: old } as any); // ativo: nunca sai
+  db.insertJob({ ...base, id: "old-lock", status: "failed", locked: true, createdAt: old, updatedAt: old } as any); // travado: fica
+  db.insertJob({ ...base, id: "new-ok", status: "succeeded", createdAt: now, updatedAt: now } as any); // recente: fica
+  const r = purgeOldJobs(now);
+  assert.deepEqual([r.jobs, r.files], [1, 2]);
+  assert.equal(db.getJob("old-ok"), undefined);
+  assert.ok(!fs.existsSync(path.join(db.FILES_DIR, "old.mp4")));
+  assert.ok(!fs.existsSync(path.join(INPUTS_DIR, "old-first.png")));
+  assert.notEqual(db.getJob("old-run"), undefined);
+  assert.notEqual(db.getJob("old-lock"), undefined); // trava protege da limpeza
+  assert.notEqual(db.getJob("new-ok"), undefined);
+  db.deleteJob("old-run"); db.deleteJob("old-lock"); db.deleteJob("new-ok");
 });

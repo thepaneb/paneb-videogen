@@ -4,7 +4,7 @@ Stack: **Kotlin + Retrofit + kotlinx.serialization + Jetpack Compose + Material3
 
 ## Arquitetura MVVM unidirecional
 
-- `VideoViewModel` (AndroidViewModel) detém **todo** o estado em `mutableStateOf`: `caps`, `provider`, `prompt`, `negative`, imagens (`Uri?`), `duration`, `aspect`, `quality`, knobs (`promptEnhance`, `cfg`, `imgStrength`, `steps`), `adjustSource`, `jobs`, `message`, `sending`.
+- `VideoViewModel` (AndroidViewModel) detém **todo** o estado em `mutableStateOf`: `caps`, `provider`, `prompt`, `negative`, imagens (`Uri?`), `duration`, `aspect`, `quality`, knobs (`promptEnhance`, `cfg`, `imgStrength`, `steps`, `camera`), `adjustSource`, `jobs`, `message`, `sending`.
 - Telas (`CreateScreen`, `HistoryScreen`, `SettingsScreen`) são **stateless**: só leem estado e despacham eventos (`vm.generate()`, `vm.selectProvider()`, `vm.startAdjust()`, `vm.saveServer()`...).
 - Efeitos colaterais ficam no ViewModel (`viewModelScope`); telas só têm `LaunchedEffect` para
   polling (histórico pausa com a tela invisível via `LifecycleEventObserver`; 4 s com job ativo, 30 s sem)

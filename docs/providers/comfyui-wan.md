@@ -78,7 +78,22 @@ Vale o mesmo do guia LTX ([seção 7](comfyui-ltx.md#7-comfyui-em-outra-máquina
 `--listen 0.0.0.0` + rede privada, nunca exponha sem autenticação. Cloud (formato `/api/...`)
 não é suportado por este provedor (ver [roadmap](../roadmap.md)).
 
-## 7. Problemas comuns
+## 7. Variante GGUF Q4 (preparada, ainda não validada)
+
+Para `pro`/clipes longos em 12 GB, este repo traz `backend/workflows/wan2-t2v-gguf.api.json`:
+igual ao T2V, mas com `UNetLoaderGGUF` + `Wan2.2-TI2V-5B-Q4_K_S.gguf` (3,1 GB, de
+[QuantStack/Wan2.2-TI2V-5B-GGUF](https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF),
+conversão do 5B oficial). Passos pendentes (manuais, exigem reiniciar o Comfy):
+
+1. Instalar o custom node [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) (Manager → *Install via Git URL*),
+   reiniciar o ComfyUI e confirmar `UNetLoaderGGUF` em `http://127.0.0.1:8188/object_info/UNetLoaderGGUF`.
+2. Baixar o `.gguf` para `ComfyUI/models/diffusion_models/`.
+3. Apontar `COMFY_WORKFLOW_WAN=workflows/wan2-t2v-gguf.api.json`, reiniciar a API e validar 1 render.
+
+Não registrado como provedor separado de propósito: sem o nó instalado, o submit falharia
+para todo job. Quando validado, vira seção própria como os demais provedores.
+
+## 8. Problemas comuns
 
 | Sintoma | Causa provável | Solução |
 |---|---|---|

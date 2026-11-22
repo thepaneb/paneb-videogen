@@ -30,7 +30,7 @@ test("comfyui: progresso do websocket vira fração 0..1 (só mensagens progress
 test("db: mediana ignora valores extremos (jobs presos não distorcem a previsão)", async () => {
   const db = await import("../src/db.js");
   const now = Date.now();
-  const mk = (id: string, ms: number) => db.insertJob({ id, userId: "u9", provider: "mock", providerJobId: id, status: "succeeded", attempts: 0, createdAt: now - ms, updatedAt: now,
+  const mk = (id: string, ms: number) => db.insertJob({ id, userId: "u9", provider: "mock", providerJobId: id, status: "succeeded", locked: false, attempts: 0, createdAt: now - ms, updatedAt: now,
     params: { prompt: "x", durationSec: 5, aspect: "1:1", quality: "std", hasImage: false, hasLastImage: false } });
   mk("m1", 10_000); mk("m2", 15_000); mk("m3", 3_600_000); // m3 ficou preso: média daria ~20 min, mediana 15 s
   assert.equal(db.medianSucceededMs("mock", 5), 15_000);
@@ -40,7 +40,7 @@ test("db: mediana ignora valores extremos (jobs presos não distorcem a previsã
 test("db: ciclo de vida, idempotência e jobs ativos", async () => {
   const db = await import("../src/db.js");
   const now = Date.now();
-  db.insertJob({ id: "j1", userId: "u1", provider: "mock", providerJobId: "p1", status: "queued", attempts: 0, idemKey: "k1", createdAt: now, updatedAt: now,
+  db.insertJob({ id: "j1", userId: "u1", provider: "mock", providerJobId: "p1", status: "queued", locked: false, attempts: 0, idemKey: "k1", createdAt: now, updatedAt: now,
     params: { prompt: "x", durationSec: 5, aspect: "9:16", quality: "std", hasImage: false, hasLastImage: false } });
   assert.equal(db.getByIdem("u1", "k1")?.id, "j1");
   assert.equal(db.getByIdem("u2", "k1"), undefined); // idempotência é por usuário

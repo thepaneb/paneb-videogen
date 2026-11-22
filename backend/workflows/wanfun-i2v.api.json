@@ -1,0 +1,126 @@
+{
+  "37": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.1_fun_camera_v1.1_1.3B_bf16.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "38": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    }
+  },
+  "39": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    }
+  },
+  "49": {
+    "class_type": "CLIPVisionLoader",
+    "inputs": {
+      "clip_name": "clip_vision_h.safetensors"
+    }
+  },
+  "52": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "{{image}}"
+    }
+  },
+  "51": {
+    "class_type": "CLIPVisionEncode",
+    "inputs": {
+      "clip_vision": ["49", 0],
+      "image": ["52", 0],
+      "crop": "none"
+    }
+  },
+  "57": {
+    "class_type": "WanCameraEmbedding",
+    "inputs": {
+      "camera_pose": "{{motion}}",
+      "width": "{{width}}",
+      "height": "{{height}}",
+      "length": "{{frames}}"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "{{prompt}}",
+      "clip": ["38", 0]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "{{negative}}",
+      "clip": ["38", 0]
+    }
+  },
+  "56": {
+    "class_type": "WanCameraImageToVideo",
+    "inputs": {
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "vae": ["39", 0],
+      "clip_vision_output": ["51", 0],
+      "start_image": ["52", 0],
+      "camera_conditions": ["57", 0],
+      "width": ["57", 1],
+      "height": ["57", 2],
+      "length": ["57", 3],
+      "batch_size": 1
+    }
+  },
+  "48": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "model": ["37", 0],
+      "shift": 8
+    }
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": ["48", 0],
+      "seed": "{{seed}}",
+      "steps": 20,
+      "cfg": 6,
+      "sampler_name": "uni_pc",
+      "scheduler": "simple",
+      "positive": ["56", 0],
+      "negative": ["56", 1],
+      "latent_image": ["56", 2],
+      "denoise": 1.0
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["3", 0],
+      "vae": ["39", 0]
+    }
+  },
+  "60": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": ["8", 0],
+      "fps": "{{fps}}"
+    }
+  },
+  "58": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": ["60", 0],
+      "filename_prefix": "{{prefix}}",
+      "format": "auto",
+      "codec": "auto"
+    }
+  }
+}

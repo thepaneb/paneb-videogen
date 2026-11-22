@@ -164,6 +164,10 @@ fun CreateScreen(vm: VideoViewModel) {
         if ((vm.caps?.providers?.size ?: 0) > 1) {
             Text("Provedor")
             Chips(vm.caps!!.providers.map { it.name }, vm.provider) { vm.selectProvider(it) }
+            vm.adjustSource?.let { src ->
+                if (vm.provider != src.provider) Text("Refazendo com ${vm.provider} (original: ${src.provider})",
+                    style = MaterialTheme.typography.labelSmall)
+            }
         }
         OutlinedTextField(
             value = vm.prompt, onValueChange = { vm.prompt = it },
@@ -211,6 +215,10 @@ fun CreateScreen(vm: VideoViewModel) {
                 Text("Passos do sampler")
                 Chips(listOf("low", "std", "high"), vm.steps, { if (it == "low") "Rápido" else if (it == "high") "Detalhado" else "Padrão" }) { vm.steps = it }
             }
+            if ("camera" in tune) {
+                Text("Movimento de câmera")
+                Chips(cameraMotions.map { it.first }, vm.camera, { m -> cameraMotions.first { it.first == m }.second }) { vm.camera = it }
+            }
             }
         }
 
@@ -220,6 +228,14 @@ fun CreateScreen(vm: VideoViewModel) {
         if (vm.message.isNotEmpty()) Text(vm.message)
     }
 }
+
+private val cameraMotions = listOf(
+    "Static" to "parada", "Pan Up" to "para cima", "Pan Down" to "para baixo",
+    "Pan Left" to "para a esquerda", "Pan Right" to "para a direita",
+    "Zoom In" to "aproximar", "Zoom Out" to "afastar",
+    "Anti Clockwise (ACW)" to "girar anti-horário", "ClockWise (CW)" to "girar horário",
+)
+private fun cameraLabel(m: String) = cameraMotions.firstOrNull { it.first == m }?.second ?: m
 
 private fun statusLabel(s: String) = when (s) {
     "queued" -> "Na fila"; "running" -> "Gerando…"; "succeeded" -> "Pronto"
@@ -272,7 +288,8 @@ fun HistoryScreen(vm: VideoViewModel) {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(j.prompt, maxLines = 2, style = MaterialTheme.typography.bodyLarge)
-                Text("${statusLabel(j.status)} · ${j.provider} · ${dateLabel(j.createdAt)}", style = MaterialTheme.typography.labelMedium)
+                Text("${statusLabel(j.status)} · ${j.provider} · ${dateLabel(j.createdAt)}" +
+                    (if (j.locked) " · protegido" else ""), style = MaterialTheme.typography.labelMedium)
                 j.params?.let { p ->
                     val q = when (p.quality) { "pro" -> "Alta"; "low" -> "Leve"; else -> "Padrão" }
                     val extra = buildList {
@@ -280,6 +297,7 @@ fun HistoryScreen(vm: VideoViewModel) {
                         p.cfg?.takeIf { it != 1.0 }?.let { add("cfg $it") }
                         p.imgStrength?.takeIf { it != 0.7 }?.let { add("img ${(it * 100).toInt()}%") }
                         p.steps?.takeIf { it != "std" }?.let { add(if (it == "low") "rápido" else "detalhado") }
+                        p.camera?.let { add(cameraLabel(it)) }
                     }
                     Text("${p.durationSec}s · ${p.aspect} · $q" +
                         (p.seed?.let { " · seed $it" } ?: "") +
@@ -309,6 +327,9 @@ fun HistoryScreen(vm: VideoViewModel) {
                         IconButton(onClick = { vm.repeat(j.id, 1) }) { Icon(Icons.Filled.Refresh, "Refazer") }
                         IconButton(onClick = { vm.repeat(j.id, 2) }) { Icon(Icons.Filled.ContentCopy, "Variar ×2") }
                         IconButton(onClick = { vm.startAdjust(j) }) { Icon(Icons.Filled.Tune, "Ajustar e gerar de novo") }
+                    }
+                    IconButton(onClick = { vm.toggleLock(j) }) {
+                        Icon(if (j.locked) Icons.Filled.LockOpen else Icons.Filled.Lock, if (j.locked) "Desproteger" else "Proteger contra exclusão")
                     }
                     IconButton(onClick = { vm.delete(j.id) }) { Icon(Icons.Filled.Delete, "Excluir") }
                 }

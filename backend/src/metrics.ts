@@ -49,6 +49,7 @@ export const jobSeconds = new Histogram("videogen_job_duration_seconds", "Do ped
 export const providerErrors = new Counter("videogen_provider_errors_total", "Erros ao falar com o provedor (submit/poll)");
 export const httpRequests = new Counter("videogen_http_requests_total", "Requisições HTTP, por rota (padrão) e status");
 export const enhanceTotal = new Counter("videogen_prompt_enhance_total", "Pedidos de aprimoramento de prompt, por resultado");
+export const jobsPurged = new Counter("videogen_jobs_purged_total", "Jobs antigos removidos pela limpeza automática");
 
 export function recordFinish(provider: string, status: string, createdAt: number) {
   jobsFinished.inc({ provider, status });
@@ -64,6 +65,6 @@ export function render(active: Record<string, number>): string {
     "# HELP process_resident_memory_bytes Memória residente", "# TYPE process_resident_memory_bytes gauge",
     `process_resident_memory_bytes ${process.memoryUsage().rss}`,
   ].join("\n");
-  return [jobsCreated, jobsFinished, jobSeconds, providerErrors, httpRequests, enhanceTotal]
+  return [jobsCreated, jobsFinished, jobSeconds, providerErrors, httpRequests, enhanceTotal, jobsPurged]
     .map((m) => m.render()).join("\n") + "\n" + gauge + "\n";
 }

@@ -25,11 +25,14 @@
 - [ ] Rodar `docker compose up` num servidor real e ajustar o que aparecer.
 
 ## Produto (próximos passos)
-- [ ] Limpeza automática de vídeos/jobs antigos (`RETENTION_DAYS`) e teto de espaço por usuário.
+- [x] Limpeza automática de vídeos/jobs antigos (`RETENTION_DAYS`, padrão 30; roda a cada rodada do worker, só terminais) e métrica `videogen_jobs_purged_total`. Teto de espaço por usuário segue pendente.
 - [ ] Custo estimado por job e teto mensal em dinheiro por usuário/provedor.
 - [ ] Manifests Kubernetes (Deployment, PVC, Ingress) e dashboard Grafana de exemplo.
 - [ ] Gerar os DTOs do Android a partir do `openapi.yaml`.
-- [ ] Notificação ao concluir (FCM): exige projeto Firebase (`google-services.json`) e um endpoint de registro de token.
+- [x] Notificação ao concluir (FCM): o worker avisa (`pushJobFinished`, melhor esforço) e o app mostra
+      notificação via `PushService` (sem plugin `google-services`: chaves `videogen.fcm*` em `local.properties`,
+      conta de serviço em `FIREBASE_SERVICE_ACCOUNT`); validado com projeto real em 2026-11-21
+      (notificação recebida no aparelho).
 - [ ] WorkManager e histórico offline (Room) no app.
 - [ ] Login por senha/OAuth, em vez de chaves estáticas, se o serviço ficar público.
 - [ ] Webhooks dos provedores que suportam (em vez de polling); Veo e agregadores (fal, Replicate) como provedores.
