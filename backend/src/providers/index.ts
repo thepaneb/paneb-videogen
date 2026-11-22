@@ -7,6 +7,7 @@ import { comfyProvider } from "./comfyui.js";
 import { comfyWanProvider } from "./comfyui-wan.js";
 import { comfyWan13Provider } from "./comfyui-wan13.js";
 import { comfyWanfunProvider } from "./comfyui-wanfun.js";
+import { genericProvider } from "./generic.js";
 
 export function registry(): Record<string, VideoProvider> {
   const r: Record<string, VideoProvider> = { mock: mockProvider };
@@ -19,6 +20,11 @@ export function registry(): Record<string, VideoProvider> {
   if (wan13Wf && fs.existsSync(wan13Wf)) r["comfyui-wan13"] = comfyWan13Provider;
   const wanfunWf = process.env.COMFY_WORKFLOW_WANFUN;
   if (wanfunWf && fs.existsSync(wanfunWf)) r["comfyui-wanfun"] = comfyWanfunProvider;
+  // Provedores agregadores genéricos: cada entrada em GENERIC_PROVIDERS vira generic-<nome>.
+  for (const name of (process.env.GENERIC_PROVIDERS ?? "").split(",").map((s) => s.trim()).filter(Boolean)) {
+    const prov = genericProvider(name);
+    if (prov) r[prov.caps.name] = prov;
+  }
   return r;
 }
 export const defaultProvider = () => {

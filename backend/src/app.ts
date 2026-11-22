@@ -50,6 +50,7 @@ export function createApp() {
   const DAILY_LIMIT = numEnv("DAILY_LIMIT", 20, 1);                    // jobs por usuário em 24h
   const MAX_VARIATIONS = Math.floor(numEnv("MAX_VARIATIONS", 4, 1));
   const ENHANCE_LIMIT = numEnv("ENHANCE_DAILY_LIMIT", 100, 1);        // por usuário/dia, em memória
+  const RATE_PER_MINUTE = numEnv("RATE_JOBS_PER_MINUTE", 10, 0);      // criações de jobs por usuário/minuto; 0 desliga
   const FILES_SECRET = process.env.FILES_SECRET ||
     createHash("sha256").update("files:" + (process.env.APP_KEYS ?? "") + (process.env.APP_KEY ?? "")).digest("hex");
   const FILES_TTL_MS = numEnv("FILES_TTL_MIN", 1440, 1) * 60_000;
@@ -57,6 +58,33 @@ export function createApp() {
       (!process.env.KLING_ACCESS_KEY || (process.env.KLING_SECRET_KEY?.length ?? 0) < 16))
     throw new Error("Kling configurado de forma incompleta (access key e secret com 16+ caracteres)");
   const enhanceUse = new Map<string, { start: number; n: number }>();
+
+  // Limitador de taxa de criação de jobs (in-memória, processo único): no máximo RATE_PER_MINUTE
+  // criações por usuário por minuto. Slot liberado se a criação falhar (queimou o slot criando job
+  // órfano). Alerta (log warn) quando uso de limite chega a 50% (é quando desligaria se bater).
+  const RATE_WINDOW_MS = 60_000;
+  const rateSlots = new Map<string, number[]>();
+  const rateWarned = new Set<string>();
+  const pruneSlots = (times: number[], now: number) => { while (times.length && now - times[0] >= RATE_WINDOW_MS) times.shift(); };
+  const acquireSlot = (user: string): { restore: () => void } | null => {
+    if (RATE_PER_MINUTE === 0) return { restore: () => {} };
+    const now = Date.now(), times = rateSlots.get(user) ?? [];
+    pruneSlots(times, now);
+    if (times.length >= RATE_PER_MINUTE) return null; // bloqueado
+    times.push(now); rateSlots.set(user, times);
+    if (times.length >= RATE_PER_MINUTE / 2 && !rateWarned.has(user)) {
+      rateWarned.add(user);
+      log.warn("limite de taxa de criação de jobs a 50%: aproximando-se do teto", { user, used: times.length, limit: RATE_PER_MINUTE });
+    }
+    return { restore: () => { const i = times.lastIndexOf(now); if (i >= 0) times.splice(i, 1); } };
+  };
+  const rate429 = (req: express.Request, res: express.Response) => {
+    const times = rateSlots.get(me(res)) ?? [];
+    const retryAfter = Math.max(1, Math.ceil(((times[0] ?? Date.now()) + RATE_WINDOW_MS - Date.now()) / 1000));
+    res.setHeader("Retry-After", String(retryAfter));
+    m.rateLimitRejected.inc({ route: req.route?.path ?? "unmatched" });
+    return fail(res, 429, `taxa de criação de jobs excedida (limite: ${RATE_PER_MINUTE}/minuto)`);
+  };
 
   const app = express();
   app.disable("x-powered-by"); // não anunciar framework/versão nos cabeçalhos
@@ -208,6 +236,8 @@ export function createApp() {
       if (badMagic) return fail(res, 400, "arquivo de imagem inválido ou corrompido");
       if (files.image?.length && !f.image) return fail(res, 400, "este provedor não aceita imagem inicial");
       if (files.lastImage?.length && !f.lastImage) return fail(res, 400, "este provedor não aceita imagem final");
+      const slot = acquireSlot(me(res));
+      if (!slot) return rate429(req, res);
       let job: Job;
       try {
         job = await createJob(me(res), prov, {
@@ -217,6 +247,7 @@ export function createApp() {
           lastImage: f.lastImage ? asset(files.lastImage?.[0]) : undefined,
         }, idemKey);
       } catch (e: any) {
+        slot.restore();
         // Corrida de idempotência: o outro request inseriu primeiro; devolve o existente como 200.
         if (idemKey && isConstraint(e)) {
           const prev = getByIdem(me(res), idemKey);
@@ -266,11 +297,18 @@ export function createApp() {
     if (countSince(me(res), Date.now() - 86_400_000) + (count - already) > DAILY_LIMIT) return fail(res, 429, "limite diário atingido");
 
     const items: Job[] = [];
+    let rateHit = false;
     try {
       for (let i = 0; i < count; i++) {
         const key = idemBase && `${idemBase}#${i}`;
         const prev = key ? getByIdem(me(res), key) : undefined;
         if (prev) { items.push(prev); continue; }
+        const slot = acquireSlot(me(res));
+        if (!slot) {
+          if (items.length === 0) return rate429(req, res);
+          rateHit = true; // sucesso parcial: encerra o loop antes do item que não teve slot
+          break;
+        }
         const seed = !prov.caps.features.seed ? undefined
           : req.body?.sameSeed === true && src.params.seed !== undefined ? src.params.seed : randomSeed();
         try {
@@ -279,6 +317,7 @@ export function createApp() {
             durationSec, aspect, quality, seed, image, lastImage, ...tune,
           }, key));
         } catch (e: any) {
+          slot.restore();
           // Corrida de idempotência: reaproveita o item criado pelo outro request.
           if (key && isConstraint(e)) {
             const raced = getByIdem(me(res), key);
@@ -292,7 +331,7 @@ export function createApp() {
       if (items.length === 0) return fail(res, 502, e.message);
       return res.status(201).json({ items: items.map(dto), error: e.message }); // sucesso parcial
     }
-    res.status(201).json({ items: items.map(dto) });
+    res.status(201).json({ items: items.map(dto), ...(rateHit ? { error: "limite de taxa atingido antes de todos os itens" } : {}) });
   });
 
   app.get("/jobs", (req, res) => {
@@ -303,6 +342,28 @@ export function createApp() {
     res.json({ items: listJobs(me(res), Math.min(Math.floor(limit), 100), before).map(dto) });
   });
   app.get("/jobs/:id", (req, res) => { const j = owned(res, req.params.id); j ? res.json(dto(j)) : fail(res, 404, "não encontrado"); });
+
+  // Fluxo de eventos do job (SSE): o estado atual no abertura + todas as mudanças de estado desde então.
+  app.get("/jobs/:id/events", (req, res) => {
+    const j = owned(res, req.params.id);
+    if (!j) return fail(res, 404, "não encontrado");
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+      Connection: "keep-alive",
+    });
+    res.write(`event: job\ndata: ${JSON.stringify(dto(j))}\n\n`);
+    let last = j.updatedAt;
+    const timer = setInterval(() => {
+      if (res.writableEnded || req.destroyed) return;
+      const cur = getJobFor(me(res), req.params.id);
+      if (!cur || cur.updatedAt === last) return; // emit only on state change (or first write)
+      last = cur.updatedAt;
+      res.write(`event: job\ndata: ${JSON.stringify(dto(cur))}\n\n`);
+    }, 1500);
+    res.on("close", () => clearInterval(timer));
+  });
 
   app.post("/jobs/:id/cancel", async (req, res) => {
     const j = owned(res, req.params.id);

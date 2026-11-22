@@ -114,33 +114,42 @@ async function advance(job: Job) {
   }
 }
 
-/** Inicia o worker; devolve uma função que o para e espera a rodada em andamento terminar. */
+/** Inicia o worker; devolve uma função que o para e espera a rodada em andamento terminar.
+ *
+ * Pool: jobs independentes rodam em paralelo — até WORKER_CONCURRENCY por rodada;
+ * jobs além do limite ficam na fila para o próximo tick (4 s), sem travar a rodada. */
 export function startWorker(everyMs = 4000): () => Promise<void> {
-  let current: Promise<void> | null = null;
+  const CONCURRENCY = Math.max(1, Math.floor(Number(process.env.WORKER_CONCURRENCY ?? 2)) || 1);
+  const inFlight = new Set<string>();
+  let round: Promise<void> | null = null;
   let roundStartedAt = 0;
+  const advanceAll = async () => {
+    const batch: Promise<void>[] = [];
+    for (const j of listActive()) {
+      if (inFlight.has(j.id) || batch.length >= CONCURRENCY) continue;
+      inFlight.add(j.id);
+      batch.push(advance(j).finally(() => inFlight.delete(j.id)));
+    }
+    purgeOldJobs(); // barato: consulta indexada; sem terminais velhos não faz nada
+    await Promise.allSettled(batch);
+  };
   const timer = setInterval(() => {
-    if (current) {
+    if (round) {
       // Alarme (não trava em silêncio): uma rodada nunca deveria exceder o pior caso
       // (poll 30s + download 120s). Se exceder, destrava para a próxima tentar.
       if (Date.now() - roundStartedAt > 180_000) {
         log.error("worker travado: rodada excedeu 180s; forçando destrave", { travadaHaMs: Date.now() - roundStartedAt });
-        current = null;
+        round = null;
       }
       return;
     }
     roundStartedAt = Date.now();
     // O finally é encadeado na promise atribuída (microtarefa: sempre roda DEPOIS da
-    // atribuição). Um finally dentro do corpo rodaria antes dela quando a rodada não
-    // tem nenhum await (fila vazia → conclusão síncrona), deixando `current` com uma
-    // promise resolvida (truthy) para sempre e travando o worker até o watchdog (180s).
-    const p = (async () => {
-      try {
-        purgeOldJobs(); // barato: consulta indexada; sem terminais velhos não faz nada
-        for (const j of listActive()) await advance(j);
-      } catch (e) { log.error("falha na rodada do worker", { error: (e as Error).message }); }
-    })();
-    current = p;
-    void p.finally(() => { if (current === p) current = null; });
+    // atribuição). Comparação contra a promise corrente: um novo round não pode ser
+    // anulado pelo finally do round anterior.
+    const p = advanceAll();
+    round = p;
+    void p.finally(() => { if (round === p) round = null; });
   }, everyMs);
-  return async () => { clearInterval(timer); await current; };
+  return async () => { clearInterval(timer); await round; };
 }

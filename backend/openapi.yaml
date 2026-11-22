@@ -140,7 +140,13 @@ components:
     Unauthorized: { description: Chave ausente ou inválida, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
     NotFound: { description: Não encontrado (ou de outro usuário), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
     BadRequest: { description: Validação, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
-    TooMany: { description: Limite diário atingido, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    TooMany:
+      description: Limite diário atingido; POST /jobs e POST /jobs/{id}/repeat devolvem `Retry-After` em 429 de limite de taxa (segundos até tentar novamente)
+      headers:
+        Retry-After:
+          description: Segundos até tentar novamente (presente nas 429 de limite de taxa)
+          schema: { type: integer, minimum: 0 }
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     BadGateway: { description: O provedor recusou ou falhou, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
 security:
   - appKey: []
@@ -244,6 +250,17 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Job protegido contra exclusão, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /jobs/{id}/events:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      summary: Fluxo de eventos do job (SSE) — estado atual no abertura + mudanças de estado
+      responses:
+        "200":
+          description: Event stream; encerra quando o cliente fecha a conexão
+          content: { "text/event-stream": { schema: { type: string } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /jobs/{id}/cancel:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }

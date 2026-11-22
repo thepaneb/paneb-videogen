@@ -12,7 +12,7 @@ usuário e só enxerga os próprios jobs, os de outros respondem `404`). Sem cha
 |---|---|
 | `GET /capabilities` | Provedores habilitados e o que cada um suporta; `promptEnhance` indica se o aprimorador está ligado; `push` indica se o push (FCM) está configurado |
 | `POST /jobs` | Cria um job (`multipart`): `prompt`, `provider`, `negativePrompt`, `duration`, `aspect`, `quality`, `seed`, `image`, `lastImage`, `promptEnhance`, `cfg`, `imgStrength`, `steps` (`low`/`std`/`high`), `camera` (movimento de câmera, só provedores com `tune` `camera`). `Idempotency-Key` opcional |
-| `GET /jobs` · `GET /jobs/:id` | Lista (`limit`, `before`) · um job |
+| `GET /jobs` · `GET /jobs/:id` · `GET /jobs/:id/events` | Lista (`limit`, `before`) · um job · **event stream SSE** do job (`event: job` com o estado atual no abertura + cada mudança de estado; encerra quando o cliente fecha a conexão) |
 | `POST /jobs/:id/repeat` | **Repete/varia** um job: `{ count (1..MAX_VARIATIONS), sameSeed, prompt, provider, duration, aspect, quality, negativePrompt, promptEnhance, cfg, imgStrength, steps, camera }` (só o que for enviado sobrescreve; `provider` troca o executor — rascunho→final). Reusa parâmetros e imagens guardadas |
 | `POST /jobs/:id/cancel` · `DELETE /jobs/:id` | Cancela · remove job, vídeo e imagens de entrada (travado devolve `409`) |
 | `POST /jobs/:id/lock` · `POST /jobs/:id/unlock` | Trava/destrava contra exclusão manual e limpeza automática |
@@ -20,6 +20,16 @@ usuário e só enxerga os próprios jobs, os de outros respondem `404`). Sem cha
 | `POST /push/tokens` · `DELETE /push/tokens` | Registra/remove o token FCM do aparelho (`{ token }`); o worker avisa ao concluir cada job |
 | `GET /healthz` · `GET /metrics` | Saúde · métricas Prometheus ([observabilidade](observability.md)) |
 | `GET /files/<arquivo>?exp=&sig=` | Vídeo (link assinado, com validade, Range) |
+
+## Limites de taxa
+
+- **`POST /jobs`** e **`POST /jobs/:id/repeat`**: no máximo `RATE_JOBS_PER_MINUTE` criações por usuário por minuto
+  (padrão `10`; `0` desliga). Exceder o limite → **429** com cabeçalho `Retry-After` (segundos até tentar de novo).
+- Junto com o teto diário (`DAILY_LIMIT`, existente). `GET`, `DELETE`, `POST /jobs/:id/cancel`, `lock` e `unlock`
+  não são limitados — apenas as criações; um `repeat` com `count: N` consome N slots.
+- Quando o uso de limite chega a 50%, é registrado um evento de alerta no log (`limite de taxa de criação de jobs
+  a 50%: aproximando-se do teto`); a métrica `videogen_rate_limit_rejected_total` conta as 429 por rota (ver
+  [observability](observability.md)).
 
 ## Previsão de conclusão (`progress`, `etaSec`)
 
@@ -38,6 +48,15 @@ mesmo provedor e duração (últimos 20); sem histórico, usa um palpite (mock 1
 - As imagens de entrada ficam em `data/inputs/` enquanto o job existir; sem elas (`409`) não dá para repetir um job de
   imagem→vídeo. Com `Idempotency-Key`, cada item usa `<chave>#<índice>` e uma retentativa não duplica nem gasta cota.
 - Sucesso parcial: se o 2º de 3 pedidos falhar no provedor, a resposta é `201` com os itens criados e um campo `error`.
+
+## Eventos do job (SSE)
+
+`GET /jobs/:id/events` — servidor abre o fluxo com o estado atual do job (`event: job`) e reenvia o mesmo
+evento a cada mudança de estado. O evento traz o mesmo schema do `GET /jobs/:id` (`status`, `output`, `error`,
+`progress`, `etaSec`). O cliente deve fechar o stream quando a conexão cair; para recuperar, refaz
+`GET /jobs/:id` (estado atual).
+
+> Útil em substituição ao polling de 4 s do app: o `queued → running → succeeded` chega quase em tempo real.
 
 ## Erros (`{ "error": "mensagem" }`)
 

@@ -11,6 +11,9 @@ confirme na documentação oficial linkada em cada guia.
 | Latência | ~15 s (simulada) | dezenas de segundos a alguns minutos | depende da GPU/resolução | minutos por clipe em GPU média | ~3 min (3 s, low) na RTX 3060 12 GB | ~2 min (3 s, low) na RTX 3060 12 GB |
 | Privacidade | local | prompts e imagens vão para a nuvem | tudo local | tudo local | tudo local | tudo local |
 | Setup | nenhum | conta + pacote + chave | instalar ComfyUI, modelos e workflow | instalar ComfyUI, 3 modelos e workflow | instalar ComfyUI, 2 modelos (+ encoder do 5B) e workflow | instalar ComfyUI, Fun + clip_vision (+ base 2.1) e workflow |
+| genérico-* (fal, Replicate, …) | conforme cadastro | conforme a API | conforme a API | conforme a API | conforme a API | conforme a API |
+
+(`generic-*` configurável — abreviado acima; veja [generic.md](generic.md).)
 
 ## Qual escolher
 
@@ -25,5 +28,5 @@ confirme na documentação oficial linkada em cada guia.
 
 ## Guias
 
-- [mock](mock.md) · [Kling](kling.md) · [ComfyUI + LTX](comfyui-ltx.md) · [ComfyUI + Wan 2.2 5B](comfyui-wan.md) · [ComfyUI + Wan 2.1 1.3B (rascunho)](comfyui-wan13.md) · [ComfyUI + Fun Camera 1.3B](comfyui-wanfun.md)
-- Outro provedor? [Como adicionar](../adding-a-provider.md)
+- [mock](mock.md) · [Kling](kling.md) · [ComfyUI + LTX](comfyui-ltx.md) · [ComfyUI + Wan 2.2 5B](comfyui-wan.md) · [ComfyUI + Wan 2.1 1.3B (rascunho)](comfyui-wan13.md) · [ComfyUI + Fun Camera 1.3B](comfyui-wanfun.md) · [genérico — fal, Replicate etc.](generic.md)
+- Outro provedor? [Como adicionar](../adding-a-provider.md) · [Provedor agregador genérico](generic.md)

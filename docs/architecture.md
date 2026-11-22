@@ -49,6 +49,8 @@ stateDiagram-v2
 | Contrato OpenAPI testado | O cliente (Android) e a API não divergem sem o CI avisar |
 | Logs JSON, `/metrics`, encerramento limpo | Operar em Docker/Kubernetes com confiança |
 | Migrações versionadas | Evolui o esquema sem apagar o histórico |
+| Pool de workers + eventos SSE (`/jobs/:id/events`) | Jobs independentes em paralelo; clientes reagem às mudanças de estado pushadas (sem re-pollar) |
+| Provedor agregador genérico (fal, Replicate, Civitai API…) | Provedor por config de ambiente (URL, auth, endpoints, mapping de id/status/URL); surge como `generic-*` em `/capabilities` |
 | SQLite via `node:sqlite` | Zero dependência nativa; troque por Postgres se virar multiusuário |
 | Provedor guarda o necessário no id | O id sobrevive a reinício (ex.: `image2video:<task_id>` na Kling) |
 
