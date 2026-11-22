@@ -17,12 +17,14 @@
       fixture em `backend/test/fixtures/`; então escrever `providers/kling-new.ts` (auth por API Key, `POST /text-to-video/<modelo>`,
       `GET /tasks`), traduzir `submitted/processing/succeeded/failed` e atualizar o guia.
 - [ ] Validar o provedor Kling legado com credenciais reais (5 s, `std`) e registrar custo/latência no guia.
-- [ ] Validar o provedor ComfyUI com um workflow LTX real; commitar um exemplo em `backend/workflows/`.
+- [x] Validar o provedor ComfyUI com workflows LTX reais; commitados `ltx2-t2v.api.json` e `ltx2-i2v.api.json` (validados na RTX 3060 12 GB em 2026-11-21).
 - [x] Commitar o Gradle wrapper (`gradle wrapper --gradle-version 8.9` em `android/`) e confirmar o build no CI.
 - [x] **Upgrade do toolchain Android** (AGP 8.5.2→9.5.2, Gradle 8.9→9.9.1, compileSdk 34→37, okhttp 4→5.5.1, retrofit 3.0):
       o AGP 9 embute o Kotlin (removido `org.jetbrains.kotlin.android`; `compilerOptions` vai no padrão do `compileOptions`);
       CI usa o wrapper (`./gradlew`); `targetSdk` segue em 34 (sem mudança de comportamento em runtime).
 - [ ] Rodar `docker compose up` num servidor real e ajustar o que aparecer.
+- [ ] Validar a variante **Wan 5B em GGUF Q4** (`backend/workflows/wan2-t2v-gguf.api.json`, ver seção 7 do guia Wan): instalar o custom node ComfyUI-GGUF, baixar o `.gguf` e fazer 1 render; então registrar como provedor.
+- [ ] Verificar se os MP4 do LTX saem **com áudio** (o workflow gera trilha; checar com `ffprobe` e documentar no guia).
 
 ## Produto (próximos passos)
 - [x] Limpeza automática de vídeos/jobs antigos (`RETENTION_DAYS`, padrão 30; roda a cada rodada do worker, só terminais) e métrica `videogen_jobs_purged_total`. Teto de espaço por usuário segue pendente.
@@ -38,3 +40,4 @@
 - [ ] Webhooks dos provedores que suportam (em vez de polling); Veo e agregadores (fal, Replicate) como provedores.
 - [ ] Storage S3/R2 e Postgres para mais de uma instância.
 - [ ] Provedor ComfyUI Cloud (caminhos `/api/...`, `X-API-Key`, `history_v2`).
+- [ ] Primeira imagem via **Z-Image Turbo no servidor** (T2I→I2V encadeado): investigado em 2026-11-21 e **adiado de propósito** — o `z_image_turbo` (11,7 GB) está no disco mas sem loader dedicado neste Comfy, e exigiria provedor de imagem + orquestração em duas etapas no worker (mudança arquitetural). Reavaliar se surgir loader nativo.
