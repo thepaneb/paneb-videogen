@@ -90,6 +90,15 @@ export function setJobLock(userId: string, id: string, locked: boolean) {
   db.prepare("UPDATE jobs SET locked=?, updated_at=? WHERE id=? AND user_id=?").run(locked ? 1 : 0, Date.now(), id, userId);
   return getJobFor(userId, id);
 }
+export interface StatRow { provider: string; status: string; ms: number; prompt: string; createdAt: number }
+/** Jobs criados desde o corte (mais novos primeiro, teto de linhas); base do painel de desempenho. */
+export function jobStatsSince(cutoffMs: number, limit = 5000): StatRow[] {
+  return db.prepare(
+    `SELECT provider, status, updated_at - created_at AS ms,
+            COALESCE(json_extract(params, '$.prompt'), '') AS prompt, created_at AS createdAt
+     FROM jobs WHERE created_at >= ? ORDER BY created_at DESC LIMIT ?`
+  ).all(cutoffMs, limit) as unknown as StatRow[];
+}
 /** Mediana (ms) de conclusão dos jobs de um provedor (mesma duração primeiro); null sem histórico. */
 export function medianSucceededMs(provider: string, durationSec: number): number | null {
   const pick = (where: string, ...args: (string | number)[]) => {

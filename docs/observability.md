@@ -21,6 +21,7 @@ Desabilitado (404) até você definir `METRICS_TOKEN`; então exige `Authorizati
 | `videogen_prompt_enhance_total` | counter | `outcome` (ok/error/limit) |
 | `videogen_jobs_purged_total` | counter | `status` do job removido (succeeded/failed/canceled) |
 | `videogen_rate_limit_rejected_total` | counter | `route` (padrão da rota: `/jobs`, `/jobs/:id/repeat`) |
+| `videogen_worker_admin_total` | counter | `action` (`pause`, `resume`, `run-now`) |
 | `videogen_jobs_active` | gauge | `status` (queued/running) |
 | `process_uptime_seconds`, `process_resident_memory_bytes` | gauge | — |
 

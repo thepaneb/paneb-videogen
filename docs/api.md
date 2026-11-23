@@ -31,6 +31,24 @@ usuário e só enxerga os próprios jobs, os de outros respondem `404`). Sem cha
   a 50%: aproximando-se do teto`); a métrica `videogen_rate_limit_rejected_total` conta as 429 por rota (ver
   [observability](observability.md)).
 
+## Control plane do worker (`ADMIN_TOKEN`)
+
+Rotas `GET /admin/worker/status`, `POST /admin/worker/pause|resume|run-now` e `GET /admin/stats` exigem
+`Authorization: Bearer <ADMIN_TOKEN>`; sem `ADMIN_TOKEN` no ambiente respondem **404** (mesmo padrão do `/metrics`).
+
+- `GET /admin/worker/status` → `{ paused, depth, inFlight[], stuck[] }`: profundidade da fila (jobs ativos),
+  ids sendo avançados na rodada atual e travados (`stuckSec` sem `updatedAt` há mais de `WORKER_STUCK_MIN`, padrão 10).
+- `POST /admin/worker/pause` para o tick automático (rodadas manuais continuam); `resume` retoma.
+- `POST /admin/worker/run-now` força uma rodada agora (vale mesmo pausado) → `{ started, paused, depth }`
+  (`started: false` quando já há rodada em andamento).
+- Cada ação incrementa `videogen_worker_admin_total{action}` (ver [observability](observability.md)).
+
+## Painel de desempenho (`GET /admin/stats?days=30`)
+
+Por provedor na janela (`days` 1–365): volume (`jobs`), terminais (`succeeded/failed/canceled`), `successRate`
+e `p50Sec`/`p95Sec` de conclusão (só `succeeded`; `null` sem histórico) + `topPrompts` (10 mais frequentes,
+só os primeiros 48 caracteres — sem texto completo).
+
 ## Previsão de conclusão (`progress`, `etaSec`)
 
 Todo `Job` traz `progress` (0 na fila; rodando: fração ao vivo do provedor — passos do sampler via

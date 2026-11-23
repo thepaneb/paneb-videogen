@@ -11,6 +11,7 @@ components:
   securitySchemes:
     appKey: { type: apiKey, in: header, name: X-App-Key }
     metricsToken: { type: http, scheme: bearer }
+    adminToken: { type: http, scheme: bearer, description: "ADMIN_TOKEN no Authorization Bearer (rotas /admin/*)" }
   schemas:
     Error:
       type: object
@@ -52,6 +53,55 @@ components:
       required: [token]
       properties:
         token: { type: string, minLength: 20, maxLength: 256, description: "Token FCM do aparelho" }
+    StuckJob:
+      type: object
+      required: [id, provider, status, stuckSec]
+      properties:
+        id: { type: string }
+        provider: { type: string }
+        status: { $ref: "#/components/schemas/Status" }
+        stuckSec: { type: integer, minimum: 0, description: "Segundos sem atualização (limite: WORKER_STUCK_MIN, padrão 10)" }
+    WorkerStatus:
+      type: object
+      required: [paused, depth, inFlight, stuck]
+      properties:
+        paused: { type: boolean, description: "Tick automático pausado (rodadas manuais continuam)" }
+        depth: { type: integer, minimum: 0, description: "Jobs ativos na fila" }
+        inFlight: { type: array, items: { type: string }, description: "Ids sendo avançados na rodada atual" }
+        stuck: { type: array, items: { $ref: "#/components/schemas/StuckJob" } }
+    RunNowResponse:
+      type: object
+      required: [started, paused, depth]
+      properties:
+        started: { type: boolean, description: "false quando já havia rodada em andamento" }
+        paused: { type: boolean }
+        depth: { type: integer, minimum: 0 }
+    ProviderStats:
+      type: object
+      required: [provider, jobs, succeeded, failed, canceled, successRate, p50Sec, p95Sec]
+      properties:
+        provider: { type: string }
+        jobs: { type: integer, minimum: 0 }
+        succeeded: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        canceled: { type: integer, minimum: 0 }
+        successRate: { type: number, minimum: 0, maximum: 1, nullable: true }
+        p50Sec: { type: number, minimum: 0, nullable: true, description: "Mediana de conclusão (só succeeded)" }
+        p95Sec: { type: number, minimum: 0, nullable: true }
+    TopPrompt:
+      type: object
+      required: [prefix, count]
+      properties:
+        prefix: { type: string, description: "Primeiros 48 caracteres do prompt (sem texto completo)" }
+        count: { type: integer, minimum: 1 }
+    StatsResponse:
+      type: object
+      required: [days, since, providers, topPrompts]
+      properties:
+        days: { type: integer }
+        since: { type: integer, description: "Corte (ms desde 1970)" }
+        providers: { type: array, items: { $ref: "#/components/schemas/ProviderStats" } }
+        topPrompts: { type: array, items: { $ref: "#/components/schemas/TopPrompt" } }
     Status:
       type: string
       enum: [queued, running, succeeded, failed, canceled]
@@ -169,6 +219,49 @@ paths:
       security: [{ metricsToken: [] }]
       responses:
         "200": { description: Texto no formato Prometheus, content: { text/plain: { schema: { type: string } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/worker/status:
+    get:
+      summary: Estado da fila do worker (pausa, profundidade, em voo, travados)
+      security: [{ adminToken: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkerStatus" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/worker/pause:
+    post:
+      summary: Pausa o tick automático do worker (rodadas manuais continuam)
+      security: [{ adminToken: [] }]
+      responses:
+        "200": { description: Estado atual, content: { application/json: { schema: { $ref: "#/components/schemas/WorkerStatus" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/worker/resume:
+    post:
+      summary: Retoma o tick automático do worker
+      security: [{ adminToken: [] }]
+      responses:
+        "200": { description: Estado atual, content: { application/json: { schema: { $ref: "#/components/schemas/WorkerStatus" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/worker/run-now:
+    post:
+      summary: Força uma rodada agora (vale mesmo pausado; 409 não se usa — started=false se já houver rodada)
+      security: [{ adminToken: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunNowResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /admin/stats:
+    get:
+      summary: Painel de desempenho por provedor (janela de dias) + prompts mais frequentes
+      security: [{ adminToken: [] }]
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 365, default: 30 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/StatsResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
   /files/{name}:

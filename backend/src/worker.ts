@@ -114,26 +114,58 @@ async function advance(job: Job) {
   }
 }
 
+/** Control plane do worker (ver `POST /admin/worker/*`): pausa, destrava e estado da fila.
+ *  Estado em módulo (processo único): `startWorker`/`stop` continuam valendo por chamada. */
+let workerPaused = false;
+const inFlight = new Set<string>();
+let round: Promise<void> | null = null;
+let roundStartedAt = 0;
+let timer: NodeJS.Timeout | null = null;
+
+/** true quando o tick automático está pausado (rodadas manuais via runWorkerNow continuam). */
+export const isWorkerPaused = () => workerPaused;
+export const setWorkerPaused = (b: boolean) => { workerPaused = b; };
+
+export interface StuckJob { id: string; provider: string; status: string; stuckSec: number }
+export interface WorkerStatus { paused: boolean; depth: number; inFlight: string[]; stuck: StuckJob[] }
+
+/** Fila agora: profundidade (ativos), quem está sendo avançado e travados (sem update há WORKER_STUCK_MIN, padrão 10). */
+export function workerStatus(): WorkerStatus {
+  const stuckMs = Math.max(1, Number(process.env.WORKER_STUCK_MIN ?? 10) || 10) * 60_000;
+  const now = Date.now();
+  const active = listActive();
+  return {
+    paused: workerPaused,
+    depth: active.length,
+    inFlight: [...inFlight],
+    stuck: active
+      .filter((j) => now - j.updatedAt > stuckMs)
+      .map((j) => ({ id: j.id, provider: j.provider, status: j.status, stuckSec: Math.round((now - j.updatedAt) / 1000) })),
+  };
+}
+
+/** Força uma rodada agora (vale mesmo pausado); false quando já há rodada em andamento. */
+export function runWorkerNow(concurrency: number): boolean {
+  if (round) return false;
+  roundStartedAt = Date.now();
+  // O finally é encadeado na promise atribuída (microtarefa: sempre roda DEPOIS da
+  // atribuição). Comparação contra a promise corrente: um novo round não pode ser
+  // anulado pelo finally do round anterior.
+  const p = advanceAll(concurrency);
+  round = p;
+  void p.finally(() => { if (round === p) round = null; });
+  return true;
+}
+
 /** Inicia o worker; devolve uma função que o para e espera a rodada em andamento terminar.
  *
  * Pool: jobs independentes rodam em paralelo — até WORKER_CONCURRENCY por rodada;
  * jobs além do limite ficam na fila para o próximo tick (4 s), sem travar a rodada. */
 export function startWorker(everyMs = 4000): () => Promise<void> {
   const CONCURRENCY = Math.max(1, Math.floor(Number(process.env.WORKER_CONCURRENCY ?? 2)) || 1);
-  const inFlight = new Set<string>();
-  let round: Promise<void> | null = null;
-  let roundStartedAt = 0;
-  const advanceAll = async () => {
-    const batch: Promise<void>[] = [];
-    for (const j of listActive()) {
-      if (inFlight.has(j.id) || batch.length >= CONCURRENCY) continue;
-      inFlight.add(j.id);
-      batch.push(advance(j).finally(() => inFlight.delete(j.id)));
-    }
-    purgeOldJobs(); // barato: consulta indexada; sem terminais velhos não faz nada
-    await Promise.allSettled(batch);
-  };
-  const timer = setInterval(() => {
+  if (timer) clearInterval(timer);
+  timer = setInterval(() => {
+    if (workerPaused) return;
     if (round) {
       // Alarme (não trava em silêncio): uma rodada nunca deveria exceder o pior caso
       // (poll 30s + download 120s). Se exceder, destrava para a próxima tentar.
@@ -143,13 +175,18 @@ export function startWorker(everyMs = 4000): () => Promise<void> {
       }
       return;
     }
-    roundStartedAt = Date.now();
-    // O finally é encadeado na promise atribuída (microtarefa: sempre roda DEPOIS da
-    // atribuição). Comparação contra a promise corrente: um novo round não pode ser
-    // anulado pelo finally do round anterior.
-    const p = advanceAll();
-    round = p;
-    void p.finally(() => { if (round === p) round = null; });
+    runWorkerNow(CONCURRENCY);
   }, everyMs);
-  return async () => { clearInterval(timer); await round; };
+  return async () => { if (timer) { clearInterval(timer); timer = null; } await round; };
+}
+
+async function advanceAll(concurrency: number) {
+  const batch: Promise<void>[] = [];
+  for (const j of listActive()) {
+    if (inFlight.has(j.id) || batch.length >= concurrency) continue;
+    inFlight.add(j.id);
+    batch.push(advance(j).finally(() => inFlight.delete(j.id)));
+  }
+  purgeOldJobs(); // barato: consulta indexada; sem terminais velhos não faz nada
+  await Promise.allSettled(batch);
 }

@@ -50,6 +50,7 @@ export const providerErrors = new Counter("videogen_provider_errors_total", "Err
 export const httpRequests = new Counter("videogen_http_requests_total", "Requisições HTTP, por rota (padrão) e status");
 export const enhanceTotal = new Counter("videogen_prompt_enhance_total", "Pedidos de aprimoramento de prompt, por resultado");
 export const jobsPurged = new Counter("videogen_jobs_purged_total", "Jobs antigos removidos pela limpeza automática");
+export const workerAdmin = new Counter("videogen_worker_admin_total", "Ações do control plane do worker (pause/resume/run-now)");
 export const rateLimitRejected = new Counter("videogen_rate_limit_rejected_total", "Criações de jobs bloqueadas pela limitação de taxa (429)");
 
 export function recordFinish(provider: string, status: string, createdAt: number) {
@@ -66,6 +67,6 @@ export function render(active: Record<string, number>): string {
     "# HELP process_resident_memory_bytes Memória residente", "# TYPE process_resident_memory_bytes gauge",
     `process_resident_memory_bytes ${process.memoryUsage().rss}`,
   ].join("\n");
-  return [jobsCreated, jobsFinished, jobSeconds, providerErrors, httpRequests, enhanceTotal, jobsPurged, rateLimitRejected]
+  return [jobsCreated, jobsFinished, jobSeconds, providerErrors, httpRequests, enhanceTotal, jobsPurged, rateLimitRejected, workerAdmin]
     .map((m) => m.render()).join("\n") + "\n" + gauge + "\n";
 }

@@ -5,11 +5,12 @@ import path from "node:path";
 import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { loadUsers, userFor } from "./auth.js";
 import { signFile, verifyFile } from "./signing.js";
-import { addPushToken, countActive, countSince, deleteJobFor, FILES_DIR, getByIdem, getJob, getJobFor, insertJob, listJobs, medianSucceededMs, removePushToken, setJobLock, updateJob } from "./db.js";
+import { addPushToken, countActive, countSince, deleteJobFor, FILES_DIR, getByIdem, getJob, getJobFor, insertJob, jobStatsSince, listJobs, medianSucceededMs, removePushToken, setJobLock, updateJob } from "./db.js";
 import { hasImageMagic, loadInput, removeInputs, saveInput } from "./inputs.js";
 import { enhanceConfig, enhancePrompt } from "./enhance.js";
 import { pushAvailable } from "./push.js";
 import { GenParams, Job, StoredParams, TERMINAL, VideoProvider } from "./model.js";
+import { runWorkerNow, setWorkerPaused, workerStatus } from "./worker.js";
 import { defaultProvider, registry } from "./providers/index.js";
 import { log } from "./log.js";
 import * as m from "./metrics.js";
@@ -116,6 +117,66 @@ export function createApp() {
     if (!safeEq((req.header("authorization") ?? "").replace(/^Bearer\s+/i, ""), tok)) return res.status(401).json({ error: "não autorizado" });
     res.type("text/plain; version=0.0.4").send(m.render(countActive()));
   });
+  // ---- admin (control plane + painel; Bearer ADMIN_TOKEN; 404 sem ADMIN_TOKEN, igual ao /metrics) ----
+  const needAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const tok = process.env.ADMIN_TOKEN;
+    if (!tok) return res.status(404).json({ error: "não encontrado" });
+    if (!safeEq((req.header("authorization") ?? "").replace(/^Bearer\s+/i, ""), tok)) return res.status(401).json({ error: "não autorizado" });
+    next();
+  };
+  const workerConcurrency = () => Math.max(1, Math.floor(Number(process.env.WORKER_CONCURRENCY ?? 2)) || 1);
+  app.get("/admin/worker/status", needAdmin, (_req, res) => res.json(workerStatus()));
+  app.post("/admin/worker/pause", needAdmin, (_req, res) => {
+    setWorkerPaused(true); m.workerAdmin.inc({ action: "pause" }); log.info("worker pausado");
+    res.json(workerStatus());
+  });
+  app.post("/admin/worker/resume", needAdmin, (_req, res) => {
+    setWorkerPaused(false); m.workerAdmin.inc({ action: "resume" }); log.info("worker retomado");
+    res.json(workerStatus());
+  });
+  app.post("/admin/worker/run-now", needAdmin, (_req, res) => {
+    const started = runWorkerNow(workerConcurrency());
+    m.workerAdmin.inc({ action: "run-now" }); log.info("worker rodada manual", { started });
+    const s = workerStatus();
+    res.json({ started, paused: s.paused, depth: s.depth });
+  });
+  // Painel de desempenho: por provedor (janela de `days`, padrão 30): volume, taxa de sucesso,
+  // p50/p95 de conclusão (só succeeded) + prompts mais frequentes (só prefixo, sem texto completo).
+  const percentile = (sorted: number[], q: number) => sorted.length
+    ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1))] : null;
+  app.get("/admin/stats", needAdmin, (req, res) => {
+    const days = Number(req.query.days ?? 30);
+    if (!Number.isFinite(days) || days < 1 || days > 365) return fail(res, 400, "days inválido (1 a 365)");
+    const since = Date.now() - Math.floor(days) * 86_400_000;
+    const rows = jobStatsSince(since);
+    const byProv = new Map<string, { jobs: number; succeeded: number; failed: number; canceled: number; ms: number[] }>();
+    const prompts = new Map<string, number>();
+    for (const r of rows) {
+      let e = byProv.get(r.provider);
+      if (!e) byProv.set(r.provider, (e = { jobs: 0, succeeded: 0, failed: 0, canceled: 0, ms: [] }));
+      e.jobs++;
+      if (r.status === "succeeded") { e.succeeded++; e.ms.push(r.ms); }
+      else if (r.status === "failed") e.failed++;
+      else if (r.status === "canceled") e.canceled++;
+      const prefix = r.prompt.slice(0, 48);
+      if (prefix) prompts.set(prefix, (prompts.get(prefix) ?? 0) + 1);
+    }
+    const sec = (ms: number | null) => ms == null ? null : Math.round(ms / 100) / 10;
+    res.json({
+      days: Math.floor(days), since,
+      providers: [...byProv].map(([provider, e]) => {
+        const ms = e.ms.sort((a, b) => a - b);
+        return {
+          provider, jobs: e.jobs, succeeded: e.succeeded, failed: e.failed, canceled: e.canceled,
+          successRate: e.jobs ? Math.round((e.succeeded / e.jobs) * 1000) / 1000 : null,
+          p50Sec: sec(percentile(ms, 0.5)), p95Sec: sec(percentile(ms, 0.95)),
+        };
+      }).sort((a, b) => b.jobs - a.jobs),
+      topPrompts: [...prompts].map(([prefix, count]) => ({ prefix, count }))
+        .sort((a, b) => b.count - a.count).slice(0, 10),
+    });
+  });
+
   // Vídeos: link assinado e com validade (?exp&sig), gerado nas respostas autenticadas; suporta Range (ExoPlayer).
   app.get("/files/:name", (req, res) => {
     const name = req.params.name;

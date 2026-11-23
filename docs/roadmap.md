@@ -21,7 +21,7 @@ Evoluções sugeridas na sessão atual, para implementar em ordem de valor/esfor
 - [ ] **Pool de workers (concorrência real de jobs)** — o worker avança `advance(job)` um a um (hoje sequencial: `for (const j of listActive()) await advance(j)`); alternativa: claims/leases por job + `WORKER_CONCURRENCY`.
 - [ ] **Eventos em tempo real:** rota `GET /jobs/:id/events` (SSE): status, progresso e saída pushados ao cliente; substitui polling de 4 s do app.
 - [ ] **Provedor agregador genérico (fal / Replicate / Civitai API):** provedor configurável por ambiente (URL, auth, endpoints de criação/status, mapping de id/status/URL do vídeo); funciona sem código novo por provedor.
-- [ ] **Control plane do worker:** `POST /admin/worker/pause|resume|run-now` + status do queue (depth, stuck); útil para Docker/K8s.
+- [x] **Control plane do worker:** `POST /admin/worker/pause|resume|run-now` + `GET /admin/worker/status` (depth, inFlight, stuck via `WORKER_STUCK_MIN`); Bearer `ADMIN_TOKEN` (404 sem ele); métrica `videogen_worker_admin_total`.
 - [x] **Rate limits por usuário:** `POST /jobs` e `POST /jobs/:id/repeat`: no máx. `RATE_JOBS_PER_MINUTE` criações/usuário/minuto (padrão 10; `0` desliga) com 429 + `Retry-After`; alerta (log) a 50% do teto; métrica `videogen_rate_limit_rejected_total`. Teto de cota montada.
 - [ ] **Medidor de custo real:** kWh/GPU do worker local via `nvidia-smi` + `GET /usage` (jobs, minutos, kWh, custo estimado por mês/usuário).
 - [ ] **API de usuários/quotas:** `GET /users`, `POST /users`, `GET/POST /users/:id/quota|usage`, revogação de chaves (por `idemKey`); dashboard de chaves.
@@ -45,7 +45,7 @@ Evoluções sugeridas na sessão atual, para implementar em ordem de valor/esfor
 - [ ] **MCP server `videogen`:** tools: `create_job`, `list_jobs`, `get_job`, `await_job`, `list_providers` — para outros agents (OpenCode, Claude Code).
 - [ ] **Histórico offline no app + sincronia:** Room com job local primeiro, upload em background, retry pendente, bulk generate (10 jobs no toque).
 - [ ] **Agendamento de geração no app:** AlarmManager/WorkManager — "do dia" (8 jobs com Idempotency-Key).
-- [ ] **Board de desempenho:** p50/p95/taxa de sucesso por provider (SQL histórico); top prompts (sem texto completo); painel próprio ou Grafana.
+- [x] **Board de desempenho:** `GET /admin/stats?days=30` — p50/p95/taxa de sucesso por provider (SQL histórico) + top prompts (só prefixo de 48 chars); painel próprio ou Grafana.
 - [ ] **Alertas de qualidade:** p95 de duração acima do esperado; queue presa > 15 min; fallback de URLs expiradas; reensaio de uploads inválidos.
 - [ ] **Timbre/branding (UI):** glassmorphism/cores por provider; tamanho/spacing tuning por device.
 - [ ] **Preview animado:** miniaturas animadas dos 2–3 frames do vídeo durante a geração.
